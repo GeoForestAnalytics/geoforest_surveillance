@@ -1,9 +1,11 @@
+// Arquivo: lib/data/repositories/acao_repository.dart
+
+import 'package:sqflite/sqflite.dart';
 import 'package:geo_forest_surveillance/data/datasources/local/database_helper.dart';
 import 'package:geo_forest_surveillance/models/acao_model.dart';
-import 'package:sqflite/sqflite.dart';
 
 class AcaoRepository {
-  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+  final DatabaseHelper _dbHelper = DatabaseHelper.instance; // CORRIGIDO
 
   Future<int> insertAcao(Acao a) async {
     final db = await _dbHelper.database;
@@ -17,18 +19,15 @@ class AcaoRepository {
 
   Future<List<Acao>> getAcoesDaCampanha(int campanhaId) async {
     final db = await _dbHelper.database;
-    final maps = await db.query('acoes', where: 'campanhaId = ?', whereArgs: [campanhaId]);
+    final maps = await db.query('acoes', where: 'campanhaId = ?', whereArgs: [campanhaId], orderBy: 'dataCriacao DESC');
     return List.generate(maps.length, (i) => Acao.fromMap(maps[i]));
   }
-  
-  // <<< ADICIONE ESTE MÉTODO >>>
-  /// Retorna uma lista com todas as ações de todas as campanhas.
+
   Future<List<Acao>> getTodasAcoes() async {
     final db = await _dbHelper.database;
     final maps = await db.query('acoes', orderBy: 'dataCriacao DESC');
     return List.generate(maps.length, (i) => Acao.fromMap(maps[i]));
   }
-  // <<< FIM DA ADIÇÃO >>>
 
   Future<void> deleteAcao(int id) async {
     final db = await _dbHelper.database;

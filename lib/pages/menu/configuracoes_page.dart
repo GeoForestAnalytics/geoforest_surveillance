@@ -4,11 +4,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:geo_dengue_monitor/controller/login_controller.dart';
-import 'package:geo_dengue_monitor/providers/license_provider.dart';
-import 'package:geo_dengue_monitor/services/licensing_service.dart';
-import 'package:geo_dengue_monitor/pages/gerente/gerenciar_equipe_page.dart';
-import 'package:geo_dengue_monitor/data/repositories/foco_repository.dart';
+import 'package:geo_forest_surveillance/controller/login_controller.dart';
+import 'package:geo_forest_surveillance/providers/license_provider.dart';
+import 'package:geo_forest_surveillance/services/licensing_service.dart';
+import 'package:geo_forest_surveillance/pages/gerente/gerenciar_equipe_page.dart';
+import 'package:geo_forest_surveillance/data/repositories/foco_repository.dart';
 
 class ConfiguracoesPage extends StatefulWidget {
   const ConfiguracoesPage({super.key});

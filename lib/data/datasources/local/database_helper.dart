@@ -1,13 +1,18 @@
 // Arquivo: lib/data/datasources/local/database_helper.dart
+
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
 class DatabaseHelper {
+  // Configuração do Singleton
   static final DatabaseHelper _instance = DatabaseHelper._privateConstructor();
   static Database? _database;
 
   DatabaseHelper._privateConstructor();
   factory DatabaseHelper() => _instance;
+  
+  // ✅ ESTA É A LINHA QUE ESTAVA FALTANDO E CAUSOU O ERRO
+  static DatabaseHelper get instance => _instance; 
 
   Future<Database> get database async => _database ??= await _initDatabase();
 
@@ -23,6 +28,7 @@ class DatabaseHelper {
   Future<void> _onConfigure(Database db) async => await db.execute('PRAGMA foreign_keys = ON');
 
   Future<void> _onCreate(Database db, int version) async {
+    // A estrutura das suas tabelas de dengue permanece a mesma
     await db.execute('''
       CREATE TABLE campanhas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

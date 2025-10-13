@@ -1,11 +1,11 @@
-// Arquivo: lib\data\repositories\campanha_repository.dart
+// Arquivo: lib/data/repositories/campanha_repository.dart
+
+import 'package:sqflite/sqflite.dart';
 import 'package:geo_forest_surveillance/data/datasources/local/database_helper.dart';
 import 'package:geo_forest_surveillance/models/campanha_model.dart';
-import 'package:sqflite/sqflite.dart';
 
 class CampanhaRepository {
-  // <<< CORREÇÃO APLICADA AQUI >>>
-  final DatabaseHelper _dbHelper = DatabaseHelper();
+  final DatabaseHelper _dbHelper = DatabaseHelper.instance; // CORRIGIDO
 
   Future<int> insertCampanha(Campanha c) async {
     final db = await _dbHelper.database;
@@ -21,17 +21,28 @@ class CampanhaRepository {
     final db = await _dbHelper.database;
     final maps = await db.query(
       'campanhas',
-      where: 'licenseId = ?',
-      whereArgs: [licenseId],
+      where: 'status = ? AND licenseId = ?',
+      whereArgs: ['ativa', licenseId],
       orderBy: 'dataCriacao DESC',
     );
     return List.generate(maps.length, (i) => Campanha.fromMap(maps[i]));
   }
-  
+
+  Future<List<Campanha>> getTodasAsCampanhasParaGerente() async {
+    final db = await _dbHelper.database;
+    final maps = await db.query('campanhas', orderBy: 'dataCriacao DESC');
+    return List.generate(maps.length, (i) => Campanha.fromMap(maps[i]));
+  }
+
+  Future<Campanha?> getCampanhaById(int id) async {
+    final db = await _dbHelper.database;
+    final maps = await db.query('campanhas', where: 'id = ?', whereArgs: [id]);
+    if (maps.isNotEmpty) return Campanha.fromMap(maps.first);
+    return null;
+  }
+
   Future<void> deleteCampanha(int id) async {
     final db = await _dbHelper.database;
-    // Graças ao "ON DELETE CASCADE", apagar uma campanha
-    // apagará automaticamente todas as ações, municípios, bairros e focos relacionados.
     await db.delete('campanhas', where: 'id = ?', whereArgs: [id]);
   }
 }

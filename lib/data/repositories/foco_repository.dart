@@ -1,23 +1,28 @@
 // lib/data/repositories/foco_repository.dart
+
+import 'package:sqflite/sqflite.dart';
 import 'package:geo_forest_surveillance/data/datasources/local/database_helper.dart';
 import 'package:geo_forest_surveillance/models/foco_dengue_model.dart';
 
 class FocoRepository {
-  // <<< CORREÇÃO APLICADA AQUI >>>
-  final DatabaseHelper _dbHelper = DatabaseHelper();
+  final DatabaseHelper _dbHelper = DatabaseHelper.instance; // CORRIGIDO
 
-  Future<FocoDengue> salvarFoco(FocoDengue foco) async {
+  Future<FocoDengue> saveFocoCompleto(FocoDengue foco) async {
     final db = await _dbHelper.database;
-    final focoMap = foco.toMap();
     
-    if (foco.id == null) {
-      final id = await db.insert('focos', focoMap);
-      final novoFocoMap = (await db.query('focos', where: 'id = ?', whereArgs: [id])).first;
-      return FocoDengue.fromMap(novoFocoMap);
-    } else {
-      await db.update('focos', focoMap, where: 'id = ?', whereArgs: [foco.id]);
-      return foco;
-    }
+    // Assegura que o foco não está sincronizado ao salvar localmente
+    final focoParaSalvar = foco.copyWith(isSynced: false);
+    final focoMap = focoParaSalvar.toMap();
+    
+    return await db.transaction<FocoDengue>((txn) async {
+      if (foco.id == null) {
+        final id = await txn.insert('focos', focoMap);
+        return focoParaSalvar.copyWith(id: id);
+      } else {
+        await txn.update('focos', focoMap, where: 'id = ?', whereArgs: [foco.id]);
+        return focoParaSalvar;
+      }
+    });
   }
 
   Future<List<FocoDengue>> getFocosDoBairro(int bairroId) async {
@@ -43,7 +48,6 @@ class FocoRepository {
     await db.delete('focos', where: 'id = ?', whereArgs: [id]);
   }
 
-  // Métodos para sincronização
   Future<List<FocoDengue>> getUnsyncedFocos() async {
     final db = await _dbHelper.database;
     final maps = await db.query('focos', where: 'isSynced = ?', whereArgs: [0]);
