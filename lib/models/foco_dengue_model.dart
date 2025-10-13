@@ -1,6 +1,8 @@
-// lib/models/foco_dengue_model.dart (NOVO ARQUIVO)
+// lib/models/foco_dengue_model.dart
 import 'package:flutter/material.dart';
-import 'package.uuid/uuid.dart';
+
+// <<< CORREÇÃO APLICADA AQUI: 'package:' em vez de 'package.' >>>
+import 'package:uuid/uuid.dart';
 
 // Enum para o tipo de local visitado
 enum TipoLocal {

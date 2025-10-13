@@ -4,11 +4,11 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:provider/provider.dart';
-import 'firebase_options.dart';
+//import 'package:firebase_core/firebase_core.dart';
+//import 'package:firebase_app_check/firebase_app_check.dart';
+//import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+//import 'package:provider/provider.dart';
+//import 'firebase_options.dart';
 
 // <<< 1. IMPORTS ATUALIZADOS PARA A NOVA LÓGICA DE DENGUE >>>
 
@@ -17,7 +17,7 @@ import 'package:geo_forest_surveillance/pages/menu/splash_page.dart';
 import 'package:geo_forest_surveillance/pages/menu/login_page.dart';
 import 'package:geo_forest_surveillance/pages/menu/home_page.dart'; // Renomeado para representar o Menu Principal
 import 'package:geo_forest_surveillance/pages/projetos/lista_projetos_page.dart'; // Será renomeado para lista_campanhas_page
-import 'package:geo_forest_surveillance/pages/menu/paywall_page.dart';
+
 
 // Páginas do Gerente
 import 'package:geo_forest_surveillance/pages/gerente/gerente_main_page.dart';
@@ -168,7 +168,8 @@ class MyApp extends StatelessWidget {
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(seedColor: baseColor, brightness: brightness),
       appBarTheme: AppBarTheme(
-        backgroundColor: brightness == Brightlight ? baseColor : Colors.grey[900],
+        // <<< CORREÇÃO AQUI: "Brightlight" para "Brightness.light" >>>
+        backgroundColor: brightness == Brightness.light ? baseColor : Colors.grey[900],
         foregroundColor: Colors.white,
         elevation: 0,
       ),

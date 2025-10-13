@@ -3,7 +3,8 @@ import 'package:geo_forest_surveillance/data/datasources/local/database_helper.d
 import 'package:geo_forest_surveillance/models/municipio_model.dart';
 
 class MunicipioRepository {
-  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+  // <<< CORREÇÃO APLICADA AQUI >>>
+  final DatabaseHelper _dbHelper = DatabaseHelper();
 
   Future<void> insertMunicipio(Municipio m) async {
     final db = await _dbHelper.database;
@@ -16,5 +17,5 @@ class MunicipioRepository {
     return List.generate(maps.length, (i) => Municipio.fromMap(maps[i]));
   }
   
-  // ... outros métodos de update e delete ...
+  // TODO: Implementar os outros métodos de update e delete conforme a necessidade
 }

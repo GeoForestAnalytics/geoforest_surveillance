@@ -4,7 +4,8 @@ import 'package:geo_forest_surveillance/models/campanha_model.dart';
 import 'package:sqflite/sqflite.dart';
 
 class CampanhaRepository {
-  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+  // <<< CORREÇÃO APLICADA AQUI >>>
+  final DatabaseHelper _dbHelper = DatabaseHelper();
 
   Future<int> insertCampanha(Campanha c) async {
     final db = await _dbHelper.database;

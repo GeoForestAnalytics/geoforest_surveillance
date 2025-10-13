@@ -15,5 +15,24 @@ class Bairro {
     this.responsavelSetor,
   });
 
-  // Atualize toMap e fromMap...
+  // <<< CORREÇÃO AQUI: MÉTODOS ADICIONADOS >>>
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'municipioId': municipioId,
+      'acaoId': acaoId,
+      'nome': nome,
+      'responsavelSetor': responsavelSetor,
+    };
+  }
+
+  factory Bairro.fromMap(Map<String, dynamic> map) {
+    return Bairro(
+      id: map['id'],
+      municipioId: map['municipioId'],
+      acaoId: map['acaoId'],
+      nome: map['nome'],
+      responsavelSetor: map['responsavelSetor'],
+    );
+  }
 }
