@@ -44,38 +44,39 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyA39yFmfxz-pW_973QyokN8qOMNviKWh70',
-    appId: '1:946133765243:android:8a7d719d0875e8bf1766de',
-    messagingSenderId: '946133765243',
-    projectId: 'vigilancia-dengue',
-    storageBucket: 'vigilancia-dengue.firebasestorage.app',
+    apiKey: 'AIzaSyAz2wJESp2Fl9tItXZtH38pBecrqZahSPo',
+    appId: '1:891916832609:android:e88cb0c7c1cefd51337f20',
+    messagingSenderId: '891916832609',
+    projectId: 'geoforestsurveillance',
+    storageBucket: 'geoforestsurveillance.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyAPHgtSwHiZgQExj5VOD-T8K2HUEUJNARQ',
-    appId: '1:946133765243:ios:569d103f873441861766de',
-    messagingSenderId: '946133765243',
-    projectId: 'vigilancia-dengue',
-    storageBucket: 'vigilancia-dengue.firebasestorage.app',
+    apiKey: 'AIzaSyDKoKb69T1hvPh-4H8TEKrYsgpRGqWLiEk',
+    appId: '1:891916832609:ios:8002863cced76269337f20',
+    messagingSenderId: '891916832609',
+    projectId: 'geoforestsurveillance',
+    storageBucket: 'geoforestsurveillance.firebasestorage.app',
     iosBundleId: 'com.example.geoForestSurveillance',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyAPHgtSwHiZgQExj5VOD-T8K2HUEUJNARQ',
-    appId: '1:946133765243:ios:569d103f873441861766de',
-    messagingSenderId: '946133765243',
-    projectId: 'vigilancia-dengue',
-    storageBucket: 'vigilancia-dengue.firebasestorage.app',
+    apiKey: 'AIzaSyDKoKb69T1hvPh-4H8TEKrYsgpRGqWLiEk',
+    appId: '1:891916832609:ios:8002863cced76269337f20',
+    messagingSenderId: '891916832609',
+    projectId: 'geoforestsurveillance',
+    storageBucket: 'geoforestsurveillance.firebasestorage.app',
     iosBundleId: 'com.example.geoForestSurveillance',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyBstyU3X2WErNNJmyGBK09yRfraMZwOrQ4',
-    appId: '1:946133765243:web:b8ed11403979b9e01766de',
-    messagingSenderId: '946133765243',
-    projectId: 'vigilancia-dengue',
-    authDomain: 'vigilancia-dengue.firebaseapp.com',
-    storageBucket: 'vigilancia-dengue.firebasestorage.app',
-    measurementId: 'G-NQYNF6NZMX',
+    apiKey: 'AIzaSyCf9B4XHL76xeKzW45oT9FpzWbtCM7yaso',
+    appId: '1:891916832609:web:d6c18d577076e9e2337f20',
+    messagingSenderId: '891916832609',
+    projectId: 'geoforestsurveillance',
+    authDomain: 'geoforestsurveillance.firebaseapp.com',
+    storageBucket: 'geoforestsurveillance.firebasestorage.app',
+    measurementId: 'G-TTHC08Z2YW',
   );
+
 }
