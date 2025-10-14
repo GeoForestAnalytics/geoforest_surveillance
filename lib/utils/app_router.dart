@@ -15,11 +15,11 @@ import 'package:geo_forest_surveillance/pages/menu/equipe_page.dart';
 import 'package:geo_forest_surveillance/pages/menu/home_page.dart';
 import 'package:geo_forest_surveillance/pages/menu/paywall_page.dart';
 import 'package:geo_forest_surveillance/pages/gerente/gerente_main_page.dart';
-import 'package:geo_forest_surveillance/pages/projetos/lista_campanhas_page.dart';
 import 'package:geo_forest_surveillance/pages/projetos/detalhes_campanha_page.dart';
 import 'package:geo_forest_surveillance/pages/acoes/detalhes_acao_page.dart';
 import 'package:geo_forest_surveillance/pages/municipios/detalhes_municipio_page.dart';
 import 'package:geo_forest_surveillance/pages/bairros/detalhes_bairro_page.dart';
+import 'package:geo_forest_surveillance/pages/projetos/lista_campanhas_page.dart';
 
 
 class AppRouter {
@@ -35,7 +35,12 @@ class AppRouter {
 
   late final GoRouter router = GoRouter(
     refreshListenable: Listenable.merge([loginController, licenseProvider, teamProvider]),
-    initialLocation: '/splash',
+    
+    // ===========================================
+    // PASSO 1: MUDANÇA DA ROTA INICIAL
+    // ===========================================
+    initialLocation: '/equipe', // <<-- ALTERADO DE '/splash' PARA '/equipe'
+
     routes: [
       GoRoute(path: '/splash', builder: (context, state) => const SplashPage()),
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
@@ -47,7 +52,7 @@ class AppRouter {
       // ESTRUTURA DE ROTAS PARA CAMPANHAS E NAVEGAÇÃO HIERÁRQUICA
       GoRoute(
         path: '/campanhas',
-        builder: (context, state) => const ListaCampanhasPage(title: 'Minhas Campanhas'),
+        builder: (context, state) => const ListaCampanhasPage(title: 'Minhas Campanhas',isImporting: false,),
         routes: [
           GoRoute(
             path: ':campanhaId', // Ex: /campanhas/1
@@ -76,7 +81,6 @@ class AppRouter {
                       GoRoute(
                         path: 'bairros/:bairroId', // Ex: /campanhas/1/acoes/2/municipios/3550308/bairros/3
                         builder: (context, state) {
-                          // <<< CORREÇÃO FINAL APLICADA AQUI >>>
                           final campanhaId = int.tryParse(state.pathParameters['campanhaId'] ?? '') ?? 0;
                           final acaoId = int.tryParse(state.pathParameters['acaoId'] ?? '') ?? 0;
                           final municipioId = state.pathParameters['municipioId'] ?? '';
@@ -87,7 +91,6 @@ class AppRouter {
                             municipioId: municipioId,
                             bairroId: bairroId,
                           );
-                          // <<< FIM DA CORREÇÃO >>>
                         },
                       ),
                     ]
@@ -100,8 +103,15 @@ class AppRouter {
       ),
     ],
 
-    // A lógica de redirect permanece a mesma
+    // ===========================================
+    // PASSO 2: DESATIVAÇÃO DO REDIRECIONAMENTO
+    // ===========================================
     redirect: (BuildContext context, GoRouterState state) {
+      // Toda a lógica de verificação foi comentada.
+      // A função agora simplesmente retorna 'null', o que permite
+      // a navegação direta para qualquer rota.
+      
+      /*
       if (!loginController.isInitialized || licenseProvider.isLoading || !teamProvider.isLoaded) {
         return '/splash';
       }
@@ -126,6 +136,8 @@ class AppRouter {
       if (currentRoute == '/login' || currentRoute == '/splash' || currentRoute == '/equipe') {
         return isGerente ? '/gerente_home' : '/home';
       }
+      */
+
       return null;
     },
     
@@ -133,5 +145,6 @@ class AppRouter {
       appBar: AppBar(title: const Text('Página não encontrada')),
       body: Center(child: Text('A rota "${state.uri}" não existe.')),
     ),
+ 
   );
 }

@@ -1,4 +1,4 @@
-// lib/pages/projetos/lista_campanhas_page.dart
+// lib/pages/projetos/lista_campanhas_page.dart (VERSÃO CORRIGIDA E FINAL)
 
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -12,7 +12,6 @@ import 'package:geo_forest_surveillance/models/campanha_model.dart';
 import 'package:geo_forest_surveillance/providers/license_provider.dart';
 import 'package:geo_forest_surveillance/pages/projetos/form_campanha_page.dart';
 
-// <<< ESTA É A DECLARAÇÃO CORRETA DA CLASSE >>>
 class ListaCampanhasPage extends StatefulWidget {
   final String title;
   final bool isImporting;
@@ -31,36 +30,20 @@ class _ListaCampanhasPageState extends State<ListaCampanhasPage> {
   final _campanhaRepository = CampanhaRepository();
   List<Campanha> _campanhas = [];
   bool _isLoading = true;
-  bool _isGerente = false;
+  // A variável _isGerente foi removida, pois a lógica agora está no build
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _carregarDadosIniciais();
-    });
-  }
-
-  Future<void> _carregarDadosIniciais() async {
-    final licenseProvider = context.read<LicenseProvider>();
-    if (mounted) {
-      setState(() {
-        _isGerente = licenseProvider.licenseData?.cargo == 'gerente';
-      });
-    }
-    await _carregarCampanhas();
+    _carregarCampanhas();
   }
 
   Future<void> _carregarCampanhas() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
-    final licenseId = context.read<LicenseProvider>().licenseData?.id;
-    if (licenseId == null) {
-      if (mounted) setState(() => _isLoading = false);
-      return;
-    }
-
+    // No modo de teste sem login, o licenseId pode ser nulo.
+    // O repository getTodasAsCampanhasParaGerente não precisa do ID.
     final data = await _campanhaRepository.getTodasAsCampanhasParaGerente();
     
     if (mounted) {
@@ -118,24 +101,7 @@ class _ListaCampanhasPageState extends State<ListaCampanhasPage> {
       _carregarCampanhas();
     }
   }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _campanhas.isEmpty
-              ? _buildEmptyState()
-              : _buildListView(),
-      floatingActionButton: _isGerente ? FloatingActionButton.extended(
-        onPressed: _navegarParaNovaCampanha,
-        icon: const Icon(Icons.add),
-        label: const Text('Nova Campanha'),
-      ) : null,
-    );
-  }
-
+  
   Widget _buildListView() {
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 80),
@@ -173,6 +139,9 @@ class _ListaCampanhasPageState extends State<ListaCampanhasPage> {
   }
 
   Widget _buildEmptyState() {
+    final isGerente = context.watch<LicenseProvider>().licenseData?.cargo == 'gerente' ||
+                      context.watch<LicenseProvider>().licenseData == null;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -182,11 +151,30 @@ class _ListaCampanhasPageState extends State<ListaCampanhasPage> {
             const Icon(Icons.folder_off_outlined, size: 64, color: Colors.grey),
             const SizedBox(height: 16),
             const Text('Nenhuma campanha encontrada.', style: TextStyle(fontSize: 18)),
-            if (_isGerente)
+            if (isGerente)
               const Text('Use o botão "+" para criar a primeira campanha.', style: TextStyle(color: Colors.grey), textAlign: TextAlign.center),
           ],
         ),
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.title)),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _campanhas.isEmpty
+              ? _buildEmptyState()
+              : _buildListView(),
+      floatingActionButton: (context.watch<LicenseProvider>().licenseData?.cargo == 'gerente' || context.watch<LicenseProvider>().licenseData == null)
+          ? FloatingActionButton.extended(
+              onPressed: _navegarParaNovaCampanha,
+              icon: const Icon(Icons.add),
+              label: const Text('Nova Campanha'),
+            )
+          : null,
     );
   }
 }

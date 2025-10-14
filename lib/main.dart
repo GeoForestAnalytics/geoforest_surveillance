@@ -11,7 +11,6 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 
 // Imports do Projeto
-import 'package:geo_forest_surveillance/data/datasources/local/database_helper.dart';
 import 'package:geo_forest_surveillance/providers/team_provider.dart';
 import 'package:geo_forest_surveillance/controller/login_controller.dart';
 import 'package:geo_forest_surveillance/pages/menu/splash_page.dart';
