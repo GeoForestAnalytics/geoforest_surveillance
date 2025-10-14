@@ -1,20 +1,20 @@
 import 'dart:async';
-import 'package.flutter/material.dart';
-import 'package.firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart';
 
 // Imports atualizados para os modelos e repositórios de Dengue
-import 'package:geo_dengue_monitor/models/foco_dengue_model.dart';
-import 'package:geo_dengue_monitor/models/diario_de_campo_model.dart';
-import 'package:geo_dengue_monitor/models/campanha_model.dart';
-import 'package:geo_dengue_monitor/models/acao_model.dart';
-import 'package:geo_dengue_monitor/models/bairro_model.dart';
-import 'package:geo_dengue_monitor/data/repositories/campanha_repository.dart';
-import 'package:geo_dengue_monitor/data/repositories/acao_repository.dart';
-import 'package:geo_dengue_monitor/data/repositories/bairro_repository.dart';
-import 'package:geo_dengue_monitor/services/gerente_service.dart'; // Será adaptado
-import 'package:geo_dengue_monitor/services/licensing_service.dart';
+import 'package:geo_forest_surveillance/models/foco_dengue_model.dart';
+import 'package:geo_forest_surveillance/models/diario_de_campo_model.dart';
+import 'package:geo_forest_surveillance/models/campanha_model.dart';
+import 'package:geo_forest_surveillance/models/acao_model.dart';
+import 'package:geo_forest_surveillance/models/bairro_model.dart';
+import 'package:geo_forest_surveillance/data/repositories/campanha_repository.dart';
+import 'package:geo_forest_surveillance/data/repositories/acao_repository.dart';
+import 'package:geo_forest_surveillance/data/repositories/bairro_repository.dart';
+import 'package:geo_forest_surveillance/services/gerente_service.dart'; // Será adaptado
+import 'package:geo_forest_surveillance/services/licensing_service.dart';
 
 class GerenteProvider with ChangeNotifier {
   final GerenteService _gerenteService = GerenteService();

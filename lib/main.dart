@@ -1,4 +1,4 @@
-// lib/main.dart (VERSÃO ADAPTADA PARA GEO DENGUE MONITOR)
+// lib/main.dart (VERSÃO COMPLETA E CORRIGIDA PARA GEO DENGUE MONITOR)
 
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -18,6 +18,7 @@ import 'package:geo_forest_surveillance/pages/menu/splash_page.dart';
 import 'package:geo_forest_surveillance/providers/license_provider.dart';
 import 'package:geo_forest_surveillance/providers/gerente_provider.dart';
 import 'package:geo_forest_surveillance/utils/app_router.dart';
+import 'package:geo_forest_surveillance/providers/map_provider.dart'; // <<< IMPORT ADICIONADO
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,7 +60,6 @@ class _AppServicesLoaderState extends State<AppServicesLoader> {
       await SystemChrome.setPreferredOrientations(
         [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown],
       );
-      // Aqui poderíamos carregar o tema, mas vamos manter simples por enquanto
     } catch (e) {
       debugPrint("!!!!!! ERRO NA INICIALIZAÇÃO DOS SERVIÇOS: $e !!!!!");
       rethrow;
@@ -97,9 +97,9 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => TeamProvider()),
         ChangeNotifierProvider(create: (_) => LicenseProvider()),
         ChangeNotifierProvider(create: (_) => GerenteProvider()),
-        // Outros providers serão adicionados aqui depois
+        ChangeNotifierProvider(create: (_) => MapProvider()), // <<< PROVIDER ADICIONADO
       ],
-      child: Builder( // Usamos Builder para ter um context com os providers
+      child: Builder(
         builder: (context) {
           final appRouter = AppRouter(
             loginController: context.read<LoginController>(),
@@ -113,7 +113,7 @@ class MyApp extends StatelessWidget {
             debugShowCheckedModeBanner: false,
             theme: _buildThemeData(Brightness.light),
             darkTheme: _buildThemeData(Brightness.dark),
-            themeMode: ThemeMode.system, // Simplificado por enquanto
+            themeMode: ThemeMode.system,
           );
         },
       ),

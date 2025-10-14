@@ -9,8 +9,8 @@ import 'package:geo_forest_surveillance/data/repositories/acao_repository.dart';
 import 'package:geo_forest_surveillance/models/acao_model.dart';
 import 'package:geo_forest_surveillance/models/campanha_model.dart';
 import 'package:geo_forest_surveillance/providers/license_provider.dart';
-import 'package:geo_forest_surveillance/providers/map_provider.dart';
-// import 'package:geo_forest_surveillance/pages/menu/map_import_page.dart'; // Você precisará criar esta página
+// import 'package:geo_forest_surveillance/providers/map_provider.dart';
+// import 'package:geo_forest_surveillance/pages/menu/map_import_page.dart';
 
 class SelecaoAcaoMapaPage extends StatefulWidget {
   const SelecaoAcaoMapaPage({super.key});
@@ -36,14 +36,13 @@ class _SelecaoAcaoMapaPageState extends State<SelecaoAcaoMapaPage> {
   }
 
   Future<void> _carregarCampanhas() async {
-    final licenseProvider = context.read<LicenseProvider>();
-    final licenseId = licenseProvider.licenseData?.id;
+    final licenseId = context.read<LicenseProvider>().licenseData?.id;
     if (licenseId == null) {
-       setState(() => _campanhasFuture = Future.value([]));
+      setState(() => _campanhasFuture = Future.value([]));
       return;
     }
     setState(() {
-      _campanhasFuture = _campanhaRepository.getTodasCampanhas(licenseId);
+      _campanhasFuture = _campanhaRepository.getTodasAsCampanhasParaGerente();
     });
   }
 
@@ -61,32 +60,16 @@ class _SelecaoAcaoMapaPageState extends State<SelecaoAcaoMapaPage> {
   }
 
   void _navegarParaMapa(Acao acao) {
-    /*
-    // TODO: A página 'map_import_page' precisa ser criada/adaptada
-    final mapProvider = Provider.of<MapProvider>(context, listen: false);
-
-    mapProvider.clearAllMapData();
-    mapProvider.setCurrentAcao(acao); // Você precisará criar este método no MapProvider
-    mapProvider.loadPontosParaAcao(); // E este também
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const MapImportPage(),
-      ),
-    );
-    */
+    // TODO: Implementar a navegação e a lógica do MapProvider para dengue.
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Navegação para o mapa da Ação: ${acao.tipo}'))
+      SnackBar(content: Text('Navegação para o mapa da Ação: ${acao.tipo} (Ainda não implementado)'))
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Selecionar Ação para Planejamento'),
-      ),
+      appBar: AppBar(title: const Text('Selecionar Ação para Mapa')),
       body: FutureBuilder<List<Campanha>>(
         future: _campanhasFuture,
         builder: (context, snapshot) {
@@ -111,16 +94,11 @@ class _SelecaoAcaoMapaPageState extends State<SelecaoAcaoMapaPage> {
                   title: Text(campanha.nome, style: const TextStyle(fontWeight: FontWeight.bold)),
                   leading: const Icon(Icons.campaign),
                   onExpansionChanged: (isExpanding) {
-                    if (isExpanding) {
-                      _carregarAcoesDaCampanha(campanha.id!);
-                    }
+                    if (isExpanding) _carregarAcoesDaCampanha(campanha.id!);
                   },
                   children: [
                     if (_isLoadingAcoes && !_acoesPorCampanha.containsKey(campanha.id))
-                      const Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
+                      const Padding(padding: EdgeInsets.all(16.0), child: Center(child: CircularProgressIndicator()))
                     else if (_acoesPorCampanha[campanha.id]?.isEmpty ?? true)
                       const ListTile(title: Text('Nenhuma ação nesta campanha.'))
                     else

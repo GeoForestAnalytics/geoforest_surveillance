@@ -3,10 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-// Imports atualizados para a lógica de Dengue
+// Imports da Lógica de Dengue
 import 'package:geo_forest_surveillance/data/repositories/campanha_repository.dart';
 import 'package:geo_forest_surveillance/models/campanha_model.dart';
-
+import 'package:geo_forest_surveillance/providers/license_provider.dart';
 
 class FormCampanhaPage extends StatefulWidget {
   final Campanha? campanhaParaEditar;
@@ -52,16 +52,14 @@ class _FormCampanhaPageState extends State<FormCampanhaPage> {
       setState(() => _isSaving = true);
 
       try {
-        final licenseProvider = context.read<LicenseProvider>();
-        final licenseId = licenseProvider.licenseData?.id;
-
+        final licenseId = context.read<LicenseProvider>().licenseData?.id;
         if (licenseId == null) {
           throw Exception("Não foi possível identificar a licença do usuário.");
         }
 
         final campanha = Campanha(
           id: widget.isEditing ? widget.campanhaParaEditar!.id : null,
-          licenseId: licenseId,
+          licenseId: widget.isEditing ? widget.campanhaParaEditar!.licenseId : licenseId,
           nome: _nomeController.text.trim(),
           orgaoResponsavel: _orgaoResponsavelController.text.trim(),
           dataCriacao: widget.isEditing ? widget.campanhaParaEditar!.dataCriacao : DateTime.now(),
@@ -81,7 +79,7 @@ class _FormCampanhaPageState extends State<FormCampanhaPage> {
               backgroundColor: Colors.green,
             ),
           );
-          Navigator.of(context).pop(true); // Retorna 'true' para indicar sucesso
+          Navigator.of(context).pop(true);
         }
       } catch (e) {
         if (mounted) {
@@ -118,12 +116,7 @@ class _FormCampanhaPageState extends State<FormCampanhaPage> {
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.campaign_outlined),
                 ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'O nome da campanha é obrigatório.';
-                  }
-                  return null;
-                },
+                validator: (value) => (value == null || value.trim().isEmpty) ? 'O nome da campanha é obrigatório.' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -134,12 +127,7 @@ class _FormCampanhaPageState extends State<FormCampanhaPage> {
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.corporate_fare_outlined),
                 ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'O órgão responsável é obrigatório.';
-                  }
-                  return null;
-                },
+                validator: (value) => (value == null || value.trim().isEmpty) ? 'O órgão responsável é obrigatório.' : null,
               ),
               const SizedBox(height: 32),
               ElevatedButton.icon(
@@ -147,7 +135,7 @@ class _FormCampanhaPageState extends State<FormCampanhaPage> {
                 icon: _isSaving
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.save_outlined),
-                label: Text(_isSaving ? 'Salvando...' : (widget.isEditing ? 'Atualizar Campanha' : 'Salvar Campanha')),
+                label: Text(_isSaving ? 'Salvando...' : (widget.isEditing ? 'Atualizar' : 'Salvar')),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   textStyle: const TextStyle(fontSize: 16),

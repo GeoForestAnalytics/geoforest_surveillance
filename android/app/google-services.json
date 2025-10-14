@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "946133765243",
+    "project_id": "vigilancia-dengue",
+    "storage_bucket": "vigilancia-dengue.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:946133765243:android:8a7d719d0875e8bf1766de",
+        "android_client_info": {
+          "package_name": "com.example.geo_forest_surveillance"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA39yFmfxz-pW_973QyokN8qOMNviKWh70"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

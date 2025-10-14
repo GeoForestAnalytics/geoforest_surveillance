@@ -32,6 +32,7 @@ dependencies:
 
   # Utilitários e Interface de Usuário
   cupertino_icons: ^1.0.8 # Ícones do iOS
+  go_router: ^14.2.0 # Navegação e roteamento
   intl: ^0.20.2 # Internacionalização e formatação
   path: ^1.9.0 # Manipulação de caminhos
   path_provider: ^2.1.5 # Acesso a diretórios do dispositivo
