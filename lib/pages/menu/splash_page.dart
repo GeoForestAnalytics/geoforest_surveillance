@@ -12,7 +12,7 @@ class SplashPage extends StatelessWidget {
       backgroundColor: Color.fromARGB(255, 243, 243, 244),
       body: Center(
         child: Image(
-          image: AssetImage('assets/images/logo_3.jpg'), // <-- Troque para o seu novo logo
+          image: AssetImage('assets/images/logo_3.jpeg'), // <-- Troque para o seu novo logo
           width: 280,
           fit: BoxFit.contain,
         ),
