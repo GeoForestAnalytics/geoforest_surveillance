@@ -1,6 +1,5 @@
 // lib/data/repositories/foco_repository.dart
 
-import 'package:sqflite/sqflite.dart';
 import 'package:geo_forest_surveillance/data/datasources/local/database_helper.dart';
 import 'package:geo_forest_surveillance/models/foco_dengue_model.dart';
 

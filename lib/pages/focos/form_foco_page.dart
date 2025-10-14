@@ -1,7 +1,6 @@
 // lib/pages/focos/form_foco_page.dart
 
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 
 import 'package:geo_forest_surveillance/models/bairro_model.dart';
