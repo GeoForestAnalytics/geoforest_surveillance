@@ -1,51 +1,29 @@
 // lib/models/foco_dengue_model.dart
+import 'dart:convert'; // Import necessário para json
 import 'package:uuid/uuid.dart';
 
-// Enum para o tipo de local visitado
-enum TipoLocal {
-  residencia,
-  terrenoBaldio,
-  comercio,
-  pontoEstrategico, // Ex: borracharia, ferro-velho
-  outro
-}
-
-// Enum para o resultado da visita
-enum StatusFoco {
-  focoEliminado, // Encontrou larvas e tratou/eliminou
-  potencial,     // Encontrou recipientes com água, mas sem larvas
-  tratado,       // Aplicou larvicida
-  recusado,      // Morador não permitiu a entrada
-  fechado,       // Imóvel estava fechado
-  semFoco        // Visitou e não encontrou nada de risco
-}
+// Enums permanecem os mesmos
+enum TipoLocal { residencia, terrenoBaldio, comercio, pontoEstrategico, outro }
+enum StatusFoco { focoEliminado, potencial, tratado, recusado, fechado, semFoco }
 
 class FocoDengue {
   int? id;
   String uuid;
   int bairroId;
-
-  // --- DADOS DE LOCALIZAÇÃO ---
   String endereco;
   double latitude;
   double longitude;
   DateTime dataVisita;
-  
-  // --- DADOS DA COLETA ---
   TipoLocal tipoLocal;
   StatusFoco statusFoco;
   List<String> recipientes;
   int? amostrasColetadas;
   String? tratamentoRealizado;
   String? observacao;
-  List<String> photoPaths;
-
-  // --- DADOS DO AGENTE ---
+  List<String> photoPaths; // <<< CAMPO ATUALIZADO/ADICIONADO
   String nomeAgente;
   int campanhaId;
-  String? bairroNome; // Campo auxiliar para relatórios
-
-  // Controle de Sincronização
+  String? bairroNome;
   bool isSynced;
 
   FocoDengue({
@@ -62,33 +40,19 @@ class FocoDengue {
     this.amostrasColetadas,
     this.tratamentoRealizado,
     this.observacao,
-    this.photoPaths = const [],
+    this.photoPaths = const [], // <<< ATUALIZADO
     required this.nomeAgente,
     required this.campanhaId,
     this.bairroNome,
     this.isSynced = false,
   }) : uuid = uuid ?? const Uuid().v4();
 
-  // <<< ADICIONE ESTE MÉTODO AQUI >>>
   FocoDengue copyWith({
-    int? id,
-    String? uuid,
-    int? bairroId,
-    String? endereco,
-    double? latitude,
-    double? longitude,
-    DateTime? dataVisita,
-    TipoLocal? tipoLocal,
-    StatusFoco? statusFoco,
-    List<String>? recipientes,
-    int? amostrasColetadas,
-    String? tratamentoRealizado,
-    String? observacao,
-    List<String>? photoPaths,
-    String? nomeAgente,
-    int? campanhaId,
-    String? bairroNome,
-    bool? isSynced,
+    int? id, String? uuid, int? bairroId, String? endereco, double? latitude,
+    double? longitude, DateTime? dataVisita, TipoLocal? tipoLocal, StatusFoco? statusFoco,
+    List<String>? recipientes, int? amostrasColetadas, String? tratamentoRealizado,
+    String? observacao, List<String>? photoPaths, String? nomeAgente, int? campanhaId,
+    String? bairroNome, bool? isSynced,
   }) {
     return FocoDengue(
       id: id ?? this.id,
@@ -104,7 +68,7 @@ class FocoDengue {
       amostrasColetadas: amostrasColetadas ?? this.amostrasColetadas,
       tratamentoRealizado: tratamentoRealizado ?? this.tratamentoRealizado,
       observacao: observacao ?? this.observacao,
-      photoPaths: photoPaths ?? this.photoPaths,
+      photoPaths: photoPaths ?? this.photoPaths, // <<< ATUALIZADO
       nomeAgente: nomeAgente ?? this.nomeAgente,
       campanhaId: campanhaId ?? this.campanhaId,
       bairroNome: bairroNome ?? this.bairroNome,
@@ -127,7 +91,7 @@ class FocoDengue {
       'amostrasColetadas': amostrasColetadas,
       'tratamentoRealizado': tratamentoRealizado,
       'observacao': observacao,
-      'photoPaths': photoPaths.join(','),
+      'photoPaths': jsonEncode(photoPaths), // <<< ATUALIZADO PARA JSON
       'nomeAgente': nomeAgente,
       'campanhaId': campanhaId,
       'isSynced': isSynced ? 1 : 0,
@@ -135,6 +99,20 @@ class FocoDengue {
   }
 
   factory FocoDengue.fromMap(Map<String, dynamic> map) {
+    List<String> decodedPaths = [];
+    if (map['photoPaths'] is String) {
+      try {
+        // Tenta decodificar como JSON
+        final decoded = jsonDecode(map['photoPaths']);
+        if (decoded is List) {
+          decodedPaths = List<String>.from(decoded);
+        }
+      } catch (e) {
+        // Fallback para o formato antigo (separado por vírgula)
+        decodedPaths = (map['photoPaths'] as String).split(',').where((p) => p.isNotEmpty).toList();
+      }
+    }
+    
     return FocoDengue(
       id: map['id'],
       uuid: map['uuid'] ?? const Uuid().v4(),
@@ -145,11 +123,11 @@ class FocoDengue {
       dataVisita: DateTime.parse(map['dataVisita']),
       tipoLocal: TipoLocal.values.firstWhere((e) => e.name == map['tipoLocal'], orElse: () => TipoLocal.outro),
       statusFoco: StatusFoco.values.firstWhere((e) => e.name == map['statusFoco'], orElse: () => StatusFoco.semFoco),
-      recipientes: (map['recipientes'] as String?)?.split(',') ?? [],
+      recipientes: (map['recipientes'] as String?)?.split(',').where((r) => r.isNotEmpty).toList() ?? [],
       amostrasColetadas: map['amostrasColetadas'],
       tratamentoRealizado: map['tratamentoRealizado'],
       observacao: map['observacao'],
-      photoPaths: (map['photoPaths'] as String?)?.split(',') ?? [],
+      photoPaths: decodedPaths, // <<< ATUALIZADO
       nomeAgente: map['nomeAgente'],
       campanhaId: map['campanhaId'],
       isSynced: map['isSynced'] == 1,

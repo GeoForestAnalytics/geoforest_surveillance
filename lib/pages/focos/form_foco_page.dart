@@ -1,13 +1,17 @@
-// lib/pages/focos/form_foco_page.dart (COM FUNCIONALIDADE GPS)
+// lib/pages/focos/form_foco_page.dart (VERSÃO CORRIGIDA COM TODAS AS FUNÇÕES)
 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:geolocator/geolocator.dart'; // <<< 1. IMPORT ADICIONADO
+import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:gal/gal.dart';
 
 import 'package:geo_forest_surveillance/models/bairro_model.dart';
 import 'package:geo_forest_surveillance/models/foco_dengue_model.dart';
 import 'package:geo_forest_surveillance/data/repositories/foco_repository.dart';
 import 'package:geo_forest_surveillance/providers/team_provider.dart';
+import 'package:geo_forest_surveillance/services/permission_service.dart';
 
 class FormFocoPage extends StatefulWidget {
   final Bairro bairro;
@@ -30,6 +34,8 @@ class FormFocoPage extends StatefulWidget {
 class _FormFocoPageState extends State<FormFocoPage> {
   final _formKey = GlobalKey<FormState>();
   final _focoRepository = FocoRepository();
+  final _permissionService = PermissionService();
+  final _picker = ImagePicker();
   bool _isSaving = false;
   
   // Controladores
@@ -41,11 +47,17 @@ class _FormFocoPageState extends State<FormFocoPage> {
   double? _longitude;
   TipoLocal _tipoLocal = TipoLocal.residencia;
   StatusFoco _statusFoco = StatusFoco.semFoco;
-
-  // <<< 2. NOVAS VARIÁVEIS DE ESTADO PARA O GPS >>>
+  
   bool _buscandoLocalizacao = false;
   String? _erroLocalizacao;
   Position? _posicaoAtualExibicao;
+
+  final List<String> _opcoesRecipientes = [
+    'Pneu', 'Vaso de Planta', 'Garrafa PET', 'Lixo Acumulado',
+    'Caixa d\'água', 'Calha', 'Piscina', 'Laje', 'Outro'
+  ];
+  final Set<String> _recipientesSelecionados = {};
+  List<String> _photoPaths = [];
 
   @override
   void initState() {
@@ -58,7 +70,9 @@ class _FormFocoPageState extends State<FormFocoPage> {
       _longitude = foco.longitude;
       _tipoLocal = foco.tipoLocal;
       _statusFoco = foco.statusFoco;
-      // Se já estamos editando, cria um objeto Position para exibição
+      _recipientesSelecionados.addAll(foco.recipientes);
+      _photoPaths = List.from(foco.photoPaths);
+      
       if (_latitude != null && _longitude != null) {
         _posicaoAtualExibicao = Position(
             latitude: _latitude!, longitude: _longitude!,
@@ -66,12 +80,89 @@ class _FormFocoPageState extends State<FormFocoPage> {
         );
       }
     } else {
-      // Tenta obter as coordenadas assim que a tela abre
       _obterLocalizacaoAtual(); 
     }
   }
+  
+  @override
+  void dispose() {
+    _enderecoController.dispose();
+    _obsController.dispose();
+    super.dispose();
+  }
 
-  // <<< 3. FUNÇÃO DE GPS COMPLETA >>>
+  Future<void> _pickImage(ImageSource source) async {
+    final bool hasPermission = await _permissionService.requestStoragePermission();
+    if (!hasPermission && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permissão de armazenamento/câmera negada.'), backgroundColor: Colors.red));
+      return;
+    }
+
+    final XFile? pickedFile = await _picker.pickImage(source: source, imageQuality: 85, maxWidth: 1280);
+    if (pickedFile == null || !mounted) return;
+
+    try {
+      await Gal.putImage(pickedFile.path);
+
+      setState(() {
+        _photoPaths.add(pickedFile.path);
+      });
+      
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Foto salva na galeria e anexada!'), backgroundColor: Colors.green));
+      }
+    } catch (e) {
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar foto: $e'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  Future<void> _salvarFoco() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_latitude == null || _longitude == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Coordenadas GPS são obrigatórias.')));
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    
+    final agente = context.read<TeamProvider>().lider ?? 'Agente não identificado';
+
+    final foco = FocoDengue(
+      id: widget.focoParaEditar?.id,
+      uuid: widget.focoParaEditar?.uuid,
+      bairroId: widget.bairro.id!,
+      campanhaId: widget.campanhaId,
+      endereco: _enderecoController.text.trim(),
+      latitude: _latitude!,
+      longitude: _longitude!,
+      dataVisita: DateTime.now(),
+      tipoLocal: _tipoLocal,
+      statusFoco: _statusFoco,
+      observacao: _obsController.text.trim(),
+      nomeAgente: agente,
+      recipientes: _recipientesSelecionados.toList(),
+      photoPaths: _photoPaths,
+    );
+
+    try {
+      await _focoRepository.saveFocoCompleto(foco);
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vistoria salva com sucesso!'), backgroundColor: Colors.green));
+        Navigator.of(context).pop(true);
+      }
+    } catch (e) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e'), backgroundColor: Colors.red));
+    } finally {
+      if(mounted) setState(() => _isSaving = false);
+    }
+  }
+  
+  // ==========================================================
+  // INÍCIO DAS FUNÇÕES QUE ESTAVAM FALTANDO
+  // ==========================================================
+
   Future<void> _obterLocalizacaoAtual() async {
     setState(() { _buscandoLocalizacao = true; _erroLocalizacao = null; });
     try {
@@ -100,47 +191,6 @@ class _FormFocoPageState extends State<FormFocoPage> {
     }
   }
 
-  // A função de salvar permanece a mesma, já que ela depende de _latitude e _longitude
-  Future<void> _salvarFoco() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_latitude == null || _longitude == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Coordenadas GPS são obrigatórias.')));
-      return;
-    }
-
-    setState(() => _isSaving = true);
-    
-    final agente = context.read<TeamProvider>().lider ?? 'Agente não identificado';
-
-    final foco = FocoDengue(
-      id: widget.focoParaEditar?.id,
-      uuid: widget.focoParaEditar?.uuid,
-      bairroId: widget.bairro.id!,
-      campanhaId: widget.campanhaId,
-      endereco: _enderecoController.text.trim(),
-      latitude: _latitude!,
-      longitude: _longitude!,
-      dataVisita: DateTime.now(),
-      tipoLocal: _tipoLocal,
-      statusFoco: _statusFoco,
-      observacao: _obsController.text.trim(),
-      nomeAgente: agente,
-    );
-
-    try {
-      await _focoRepository.saveFocoCompleto(foco);
-      if(mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vistoria salva com sucesso!'), backgroundColor: Colors.green));
-        Navigator.of(context).pop(true);
-      }
-    } catch (e) {
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e'), backgroundColor: Colors.red));
-    } finally {
-      if(mounted) setState(() => _isSaving = false);
-    }
-  }
-
-  // <<< 4. FUNÇÕES PARA TRADUZIR OS ENUMS PARA PORTUGUÊS >>>
   String _getTextoTipoLocal(TipoLocal tipo) {
     switch (tipo) {
       case TipoLocal.residencia: return 'Residência';
@@ -162,6 +212,10 @@ class _FormFocoPageState extends State<FormFocoPage> {
     }
   }
 
+  // ==========================================================
+  // FIM DAS FUNÇÕES QUE ESTAVAM FALTANDO
+  // ==========================================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -176,7 +230,6 @@ class _FormFocoPageState extends State<FormFocoPage> {
               Text('Bairro/Setor: ${widget.bairro.nome}', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 16),
               
-              // <<< 5. WIDGET DO GPS ADICIONADO AO FORMULÁRIO >>>
               _buildColetorCoordenadas(),
               const SizedBox(height: 16),
 
@@ -187,7 +240,6 @@ class _FormFocoPageState extends State<FormFocoPage> {
               ),
               const SizedBox(height: 16),
               
-              // Dropdowns agora usam os textos traduzidos
               DropdownButtonFormField<TipoLocal>(
                 value: _tipoLocal,
                 decoration: const InputDecoration(labelText: 'Tipo do Imóvel', border: OutlineInputBorder()),
@@ -202,6 +254,13 @@ class _FormFocoPageState extends State<FormFocoPage> {
                 onChanged: (v) { if (v != null) setState(() => _statusFoco = v); },
               ),
               const SizedBox(height: 16),
+
+              _buildSelecaoRecipientes(),
+              const SizedBox(height: 16),
+              
+              _buildPhotoSection(),
+              const SizedBox(height: 16),
+
               TextFormField(
                 controller: _obsController,
                 decoration: const InputDecoration(labelText: 'Observações', border: OutlineInputBorder()),
@@ -210,7 +269,7 @@ class _FormFocoPageState extends State<FormFocoPage> {
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: _isSaving ? null : _salvarFoco,
-                icon: _isSaving ? const CircularProgressIndicator(color: Colors.white) : const Icon(Icons.save),
+                icon: _isSaving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white)) : const Icon(Icons.save),
                 label: const Text('Salvar Vistoria'),
                 style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
               ),
@@ -221,7 +280,6 @@ class _FormFocoPageState extends State<FormFocoPage> {
     );
   }
 
-  // <<< 6. WIDGET PARA A INTERFACE DO GPS >>>
   Widget _buildColetorCoordenadas() {
     final latExibicao = _posicaoAtualExibicao?.latitude;
     final lonExibicao = _posicaoAtualExibicao?.longitude;
@@ -258,6 +316,107 @@ class _FormFocoPageState extends State<FormFocoPage> {
                 onPressed: _buscandoLocalizacao ? null : _obterLocalizacaoAtual, 
                 tooltip: 'Obter localização atual'
               ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSelecaoRecipientes() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Recipientes Encontrados', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade400),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Wrap(
+            spacing: 8.0,
+            runSpacing: 4.0,
+            children: _opcoesRecipientes.map((recipiente) {
+              final isSelected = _recipientesSelecionados.contains(recipiente);
+              return FilterChip(
+                label: Text(recipiente),
+                selected: isSelected,
+                onSelected: (bool selected) {
+                  setState(() {
+                    if (selected) {
+                      _recipientesSelecionados.add(recipiente);
+                    } else {
+                      _recipientesSelecionados.remove(recipiente);
+                    }
+                  });
+                },
+                backgroundColor: isSelected ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5) : null,
+                selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                checkmarkColor: Theme.of(context).colorScheme.primary,
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPhotoSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Fotos da Vistoria', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(8)),
+          child: Column(
+            children: [
+              _photoPaths.isEmpty
+                  ? const Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 24.0), child: Text('Nenhuma foto adicionada.')))
+                  : GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8),
+                      itemCount: _photoPaths.length,
+                      itemBuilder: (context, index) {
+                        final photoPath = _photoPaths[index];
+                        final file = File(photoPath);
+
+                        return Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: file.existsSync()
+                                ? Image.file(file, fit: BoxFit.cover)
+                                : Container(
+                                    color: Colors.grey.shade300,
+                                    child: const Icon(Icons.broken_image_outlined, color: Colors.grey, size: 40),
+                                  ),
+                            ),
+                            Positioned(
+                              top: -8, right: -8,
+                              child: IconButton(
+                                icon: const CircleAvatar(backgroundColor: Colors.white, radius: 12, child: Icon(Icons.close, color: Colors.red, size: 16)),
+                                onPressed: () => setState(() => _photoPaths.removeAt(index)),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Expanded(child: OutlinedButton.icon(onPressed: () => _pickImage(ImageSource.camera), icon: const Icon(Icons.camera_alt_outlined), label: const Text('Câmera'))),
+                    const SizedBox(width: 8),
+                    Expanded(child: OutlinedButton.icon(onPressed: () => _pickImage(ImageSource.gallery), icon: const Icon(Icons.photo_library_outlined), label: const Text('Galeria'))),
+                  ],
+                ),
             ],
           ),
         ),

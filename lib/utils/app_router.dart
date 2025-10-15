@@ -1,4 +1,4 @@
-// lib/utils/app_router.dart
+// lib/utils/app_router.dart (VERSÃO CORRIGIDA PARA PRODUÇÃO)
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -37,9 +37,9 @@ class AppRouter {
     refreshListenable: Listenable.merge([loginController, licenseProvider, teamProvider]),
     
     // ===========================================
-    // PASSO 1: MUDANÇA DA ROTA INICIAL
+    // PASSO 1: ROTA INICIAL RESTAURADA
     // ===========================================
-    initialLocation: '/equipe', // <<-- ALTERADO DE '/splash' PARA '/equipe'
+    initialLocation: '/splash',
 
     routes: [
       GoRoute(path: '/splash', builder: (context, state) => const SplashPage()),
@@ -104,14 +104,10 @@ class AppRouter {
     ],
 
     // ===========================================
-    // PASSO 2: DESATIVAÇÃO DO REDIRECIONAMENTO
+    // PASSO 2: LÓGICA DE REDIRECIONAMENTO REATIVADA
     // ===========================================
     redirect: (BuildContext context, GoRouterState state) {
-      // Toda a lógica de verificação foi comentada.
-      // A função agora simplesmente retorna 'null', o que permite
-      // a navegação direta para qualquer rota.
-      
-      /*
+      // A lógica de verificação foi descomentada e está ativa novamente.
       if (!loginController.isInitialized || licenseProvider.isLoading || !teamProvider.isLoaded) {
         return '/splash';
       }
@@ -136,8 +132,7 @@ class AppRouter {
       if (currentRoute == '/login' || currentRoute == '/splash' || currentRoute == '/equipe') {
         return isGerente ? '/gerente_home' : '/home';
       }
-      */
-
+      
       return null;
     },
     
