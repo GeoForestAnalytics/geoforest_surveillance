@@ -1,4 +1,4 @@
-// lib/pages/menu/configuracoes_page.dart
+// lib/pages/menu/configuracoes_page.dart (VERSÃO ATUALIZADA)
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'package:geo_forest_surveillance/controller/login_controller.dart';
 import 'package:geo_forest_surveillance/providers/license_provider.dart';
+import 'package:geo_forest_surveillance/providers/theme_provider.dart'; // <<< ADICIONE ESTE IMPORT
 import 'package:geo_forest_surveillance/services/licensing_service.dart';
 import 'package:geo_forest_surveillance/pages/gerente/gerenciar_equipe_page.dart';
 import 'package:geo_forest_surveillance/data/repositories/foco_repository.dart';
@@ -89,89 +90,120 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
   Widget build(BuildContext context) {
     final licenseProvider = context.watch<LicenseProvider>();
     final isGerente = licenseProvider.licenseData?.cargo == 'gerente';
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Configurações e Gerenciamento')),
-      body: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Conta', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.indigo)),
-                  const SizedBox(height: 8),
-                  Card(
-                    elevation: 2,
-                    child: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: _isLoadingLicense
-                              ? const Center(child: CircularProgressIndicator())
-                              : _deviceUsage == null
-                                  ? const Text('Não foi possível carregar os dados da licença.')
-                                  : Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text('Usuário: ${FirebaseAuth.instance.currentUser?.email ?? 'Desconhecido'}'),
-                                        const SizedBox(height: 12),
-                                        const Text('Dispositivos Registrados:', style: TextStyle(fontWeight: FontWeight.bold)),
-                                        const SizedBox(height: 4),
-                                        Text(' • Smartphones: ${_deviceUsage!['smartphone']}'),
-                                        Text(' • Desktops: ${_deviceUsage!['desktop']}'),
-                                      ],
-                                    ),
+    
+    // Usamos um Consumer para ter acesso ao ThemeProvider
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        
+        // Determina se o switch deve estar "ligado" (modo escuro)
+        final isDarkMode = themeProvider.themeMode == ThemeMode.dark ||
+                           (themeProvider.themeMode == ThemeMode.system && MediaQuery.of(context).platformBrightness == Brightness.dark);
+                           
+        return Scaffold(
+          appBar: AppBar(title: const Text('Configurações e Gerenciamento')),
+          body: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Conta', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.indigo)),
+                      const SizedBox(height: 8),
+                      Card(
+                        elevation: 2,
+                        child: Column(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: _isLoadingLicense
+                                  ? const Center(child: CircularProgressIndicator())
+                                  : _deviceUsage == null
+                                      ? const Text('Não foi possível carregar os dados da licença.')
+                                      : Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text('Usuário: ${FirebaseAuth.instance.currentUser?.email ?? 'Desconhecido'}'),
+                                            const SizedBox(height: 12),
+                                            const Text('Dispositivos Registrados:', style: TextStyle(fontWeight: FontWeight.bold)),
+                                            const SizedBox(height: 4),
+                                            Text(' • Smartphones: ${_deviceUsage!['smartphone']}'),
+                                            Text(' • Desktops: ${_deviceUsage!['desktop']}'),
+                                          ],
+                                        ),
+                            ),
+                            const Divider(height: 1),
+                            ListTile(
+                              leading: const Icon(Icons.logout, color: Colors.red),
+                              title: const Text('Sair da Conta', style: TextStyle(color: Colors.red)),
+                              onTap: _handleLogout,
+                            ),
+                          ],
                         ),
-                        const Divider(height: 1),
-                        ListTile(
-                          leading: const Icon(Icons.logout, color: Colors.red),
-                          title: const Text('Sair da Conta', style: TextStyle(color: Colors.red)),
-                          onTap: _handleLogout,
+                      ),
+                      
+                      const Divider(thickness: 1, height: 48),
+
+                      // =======================================================
+                      // >> NOVA SEÇÃO DE TEMA ADICIONADA AQUI <<
+                      // =======================================================
+                      const Text('Aparência', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal)),
+                      const SizedBox(height: 8),
+                      Card(
+                        elevation: 2,
+                        child: SwitchListTile(
+                          title: const Text('Modo Escuro'),
+                          subtitle: const Text('Reduz o brilho e ajuda a economizar bateria'),
+                          secondary: Icon(isDarkMode ? Icons.dark_mode_outlined : Icons.light_mode_outlined),
+                          value: isDarkMode,
+                          onChanged: (value) {
+                            final newMode = value ? ThemeMode.dark : ThemeMode.light;
+                            themeProvider.setThemeMode(newMode);
+                          },
                         ),
-                      ],
-                    ),
-                  ),
-                  
-                  const Divider(thickness: 1, height: 48),
-
-                  const Text('Gerenciamento', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-                   if (isGerente)
-                    Card(
-                      elevation: 2,
-                      child: ListTile(
-                        leading: const Icon(Icons.groups_outlined, color: Colors.blueAccent),
-                        title: const Text('Gerenciar Equipe'),
-                        subtitle: const Text('Adicione ou remova agentes.'),
-                        onTap: () {
-                          // Navigator.push(context, MaterialPageRoute(builder: (context) => const GerenciarEquipePage()));
-                        },
                       ),
-                    ),
 
-                  const Divider(thickness: 1, height: 48),
+                      const Divider(thickness: 1, height: 48),
 
-                  const Text('Ações Perigosas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red)),
-                  const SizedBox(height: 8),
-                  Card(
-                    elevation: 2,
-                    color: Colors.red.shade50,
-                    child: ListTile(
-                      leading: const Icon(Icons.delete_sweep_outlined, color: Colors.red),
-                      title: const Text('Limpar TODOS os Focos'),
-                      subtitle: const Text('Apaga todos os registros de focos do dispositivo.'),
-                      onTap: () => _mostrarDialogoLimpeza(
-                        titulo: 'Limpar Todos os Focos',
-                        conteudo: 'Tem certeza? TODOS os dados de focos e vistorias serão apagados permanentemente deste dispositivo.',
-                        onConfirmar: () async {
-                          // TODO: Chamar _focoRepository.limparTodosOsFocos()
-                          // await _focoRepository.limparTodosOsFocos();
-                          if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Todos os focos foram apagados!', style: TextStyle(color: Colors.white)), backgroundColor: Colors.red));
-                        },
+                      const Text('Gerenciamento', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                       if (isGerente)
+                        Card(
+                          elevation: 2,
+                          child: ListTile(
+                            leading: const Icon(Icons.groups_outlined, color: Colors.blueAccent),
+                            title: const Text('Gerenciar Equipe'),
+                            subtitle: const Text('Adicione ou remova agentes.'),
+                            onTap: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (context) => const GerenciarEquipePage()));
+                            },
+                          ),
+                        ),
+
+                      const Divider(thickness: 1, height: 48),
+
+                      const Text('Ações Perigosas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red)),
+                      const SizedBox(height: 8),
+                      Card(
+                        elevation: 2,
+                        color: Colors.red.shade50,
+                        child: ListTile(
+                          leading: const Icon(Icons.delete_sweep_outlined, color: Colors.red),
+                          title: const Text('Limpar TODOS os Focos'),
+                          subtitle: const Text('Apaga todos os registros de focos do dispositivo.'),
+                          onTap: () => _mostrarDialogoLimpeza(
+                            titulo: 'Limpar Todos os Focos',
+                            conteudo: 'Tem certeza? TODOS os dados de focos e vistorias serão apagados permanentemente deste dispositivo.',
+                            onConfirmar: () async {
+                              // TODO: Chamar _focoRepository.limparTodosOsFocos()
+                              // await _focoRepository.limparTodosOsFocos();
+                              if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Todos os focos foram apagados!', style: TextStyle(color: Colors.white)), backgroundColor: Colors.red));
+                            },
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
+        );
+      },
     );
   }
 }

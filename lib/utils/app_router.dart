@@ -1,4 +1,4 @@
-// lib/utils/app_router.dart (VERSÃO CORRIGIDA PARA PRODUÇÃO)
+// lib/utils/app_router.dart (VERSÃO FINAL E CORRIGIDA)
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -20,6 +20,8 @@ import 'package:geo_forest_surveillance/pages/acoes/detalhes_acao_page.dart';
 import 'package:geo_forest_surveillance/pages/municipios/detalhes_municipio_page.dart';
 import 'package:geo_forest_surveillance/pages/bairros/detalhes_bairro_page.dart';
 import 'package:geo_forest_surveillance/pages/projetos/lista_campanhas_page.dart';
+import 'package:geo_forest_surveillance/pages/menu/register_page.dart';
+import 'package:geo_forest_surveillance/pages/menu/forgot_password_page.dart';
 
 
 class AppRouter {
@@ -36,14 +38,18 @@ class AppRouter {
   late final GoRouter router = GoRouter(
     refreshListenable: Listenable.merge([loginController, licenseProvider, teamProvider]),
     
-    // ===========================================
-    // PASSO 1: ROTA INICIAL RESTAURADA
-    // ===========================================
     initialLocation: '/splash',
 
     routes: [
       GoRoute(path: '/splash', builder: (context, state) => const SplashPage()),
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
+
+      // =======================================================
+      // >> AS ROTAS QUE FALTAVAM FORAM ADICIONADAS AQUI <<
+      // =======================================================
+      GoRoute(path: '/register', builder: (context, state) => const RegisterPage()),
+      GoRoute(path: '/forgot-password', builder: (context, state) => const ForgotPasswordPage()),
+      
       GoRoute(path: '/equipe', builder: (context, state) => const EquipePage()),
       GoRoute(path: '/home', builder: (context, state) => const HomePage(title: 'Geo Dengue Monitor')),
       GoRoute(path: '/paywall', builder: (context, state) => const PaywallPage()),
@@ -103,33 +109,38 @@ class AppRouter {
       ),
     ],
 
-    // ===========================================
-    // PASSO 2: LÓGICA DE REDIRECIONAMENTO REATIVADA
-    // ===========================================
     redirect: (BuildContext context, GoRouterState state) {
-      // A lógica de verificação foi descomentada e está ativa novamente.
       if (!loginController.isInitialized || licenseProvider.isLoading || !teamProvider.isLoaded) {
         return '/splash';
       }
       final isLoggedIn = loginController.isLoggedIn;
       final currentRoute = state.matchedLocation;
+
+      // Se não está logado, e não está tentando acessar login/registro, redireciona para login
+      final publicRoutes = ['/login', '/register', '/forgot-password'];
       if (!isLoggedIn) {
-        return currentRoute == '/login' ? null : '/login';
+        return publicRoutes.contains(currentRoute) ? null : '/login';
       }
+
       final license = licenseProvider.licenseData;
       if (license == null) {
+        // Se está logado mas não tem licença, algo está errado, volta pro login
         return '/login';
       }
+
       final isLicenseOk = (license.status == 'ativa' || license.status == 'trial');
       if (!isLicenseOk) {
         return currentRoute == '/paywall' ? null : '/paywall';
       }
+      
       final isGerente = license.cargo == 'gerente';
       final precisaIdentificarEquipe = !isGerente && (teamProvider.lider == null || teamProvider.lider!.isEmpty);
       if (precisaIdentificarEquipe) {
         return currentRoute == '/equipe' ? null : '/equipe';
       }
-      if (currentRoute == '/login' || currentRoute == '/splash' || currentRoute == '/equipe') {
+      
+      // Se o usuário já passou por todas as verificações e está em uma página pública, redireciona para a home
+      if (publicRoutes.contains(currentRoute) || currentRoute == '/splash' || currentRoute == '/equipe') {
         return isGerente ? '/gerente_home' : '/home';
       }
       
