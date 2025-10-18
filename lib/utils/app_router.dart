@@ -1,4 +1,4 @@
-// lib/utils/app_router.dart (VERSÃO FINAL E CORRIGIDA)
+// lib/utils/app_router.dart (VERSÃO COM CORREÇÃO DO LOOP DE REDIRECIONAMENTO)
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -43,32 +43,26 @@ class AppRouter {
     routes: [
       GoRoute(path: '/splash', builder: (context, state) => const SplashPage()),
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
-
-      // =======================================================
-      // >> AS ROTAS QUE FALTAVAM FORAM ADICIONADAS AQUI <<
-      // =======================================================
       GoRoute(path: '/register', builder: (context, state) => const RegisterPage()),
       GoRoute(path: '/forgot-password', builder: (context, state) => const ForgotPasswordPage()),
-      
       GoRoute(path: '/equipe', builder: (context, state) => const EquipePage()),
       GoRoute(path: '/home', builder: (context, state) => const HomePage(title: 'Geo Dengue Monitor')),
       GoRoute(path: '/paywall', builder: (context, state) => const PaywallPage()),
       GoRoute(path: '/gerente_home', builder: (context, state) => const GerenteMainPage()),
       
-      // ESTRUTURA DE ROTAS PARA CAMPANHAS E NAVEGAÇÃO HIERÁRQUICA
       GoRoute(
         path: '/campanhas',
         builder: (context, state) => const ListaCampanhasPage(title: 'Minhas Campanhas',isImporting: false,),
         routes: [
           GoRoute(
-            path: ':campanhaId', // Ex: /campanhas/1
+            path: ':campanhaId',
             builder: (context, state) {
               final campanhaId = int.tryParse(state.pathParameters['campanhaId'] ?? '') ?? 0;
               return DetalhesCampanhaPage(campanhaId: campanhaId);
             },
             routes: [
               GoRoute(
-                path: 'acoes/:acaoId', // Ex: /campanhas/1/acoes/2
+                path: 'acoes/:acaoId',
                 builder: (context, state) {
                    final campanhaId = int.tryParse(state.pathParameters['campanhaId'] ?? '') ?? 0;
                    final acaoId = int.tryParse(state.pathParameters['acaoId'] ?? '') ?? 0;
@@ -76,7 +70,7 @@ class AppRouter {
                 },
                 routes: [
                   GoRoute(
-                    path: 'municipios/:municipioId', // Ex: /campanhas/1/acoes/2/municipios/3550308
+                    path: 'municipios/:municipioId',
                     builder: (context, state) {
                       final campanhaId = int.tryParse(state.pathParameters['campanhaId'] ?? '') ?? 0;
                       final acaoId = int.tryParse(state.pathParameters['acaoId'] ?? '') ?? 0;
@@ -85,7 +79,7 @@ class AppRouter {
                     },
                     routes: [
                       GoRoute(
-                        path: 'bairros/:bairroId', // Ex: /campanhas/1/acoes/2/municipios/3550308/bairros/3
+                        path: 'bairros/:bairroId',
                         builder: (context, state) {
                           final campanhaId = int.tryParse(state.pathParameters['campanhaId'] ?? '') ?? 0;
                           final acaoId = int.tryParse(state.pathParameters['acaoId'] ?? '') ?? 0;
@@ -109,22 +103,31 @@ class AppRouter {
       ),
     ],
 
+    // ===========================================
+    // >> LÓGICA DE REDIRECIONAMENTO CORRIGIDA <<
+    // ===========================================
     redirect: (BuildContext context, GoRouterState state) {
-      if (!loginController.isInitialized || licenseProvider.isLoading || !teamProvider.isLoaded) {
-        return '/splash';
-      }
+      final isInitializing = !loginController.isInitialized || licenseProvider.isLoading || !teamProvider.isLoaded;
       final isLoggedIn = loginController.isLoggedIn;
       final currentRoute = state.matchedLocation;
-
-      // Se não está logado, e não está tentando acessar login/registro, redireciona para login
       final publicRoutes = ['/login', '/register', '/forgot-password'];
+
+      // Se estiver inicializando, mostre o splash. A exceção é se já tivermos caído na tela de login,
+      // para evitar o loop de redirecionamento.
+      if (isInitializing && !publicRoutes.contains(currentRoute)) {
+        return '/splash';
+      }
+
+      // Se não estiver logado
       if (!isLoggedIn) {
+        // Se já estiver em uma rota pública, pode ficar. Senão, vai para o login.
         return publicRoutes.contains(currentRoute) ? null : '/login';
       }
 
+      // Se chegou aqui, O USUÁRIO ESTÁ LOGADO
       final license = licenseProvider.licenseData;
       if (license == null) {
-        // Se está logado mas não tem licença, algo está errado, volta pro login
+        // Logado mas sem licença? Algo muito errado. Volta para o login para segurança.
         return '/login';
       }
 
@@ -139,11 +142,12 @@ class AppRouter {
         return currentRoute == '/equipe' ? null : '/equipe';
       }
       
-      // Se o usuário já passou por todas as verificações e está em uma página pública, redireciona para a home
+      // Se o usuário já logado está em alguma página inicial/pública, redireciona para a home correta.
       if (publicRoutes.contains(currentRoute) || currentRoute == '/splash' || currentRoute == '/equipe') {
         return isGerente ? '/gerente_home' : '/home';
       }
       
+      // Se nenhuma regra se aplica, não redireciona.
       return null;
     },
     
