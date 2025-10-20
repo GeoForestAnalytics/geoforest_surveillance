@@ -1,4 +1,4 @@
-// lib/pages/menu/home_page.dart
+// lib/pages/menu/home_page.dart (VERSÃO CORRIGIDA E ATUALIZADA)
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -15,6 +15,11 @@ import 'package:geo_forest_surveillance/widgets/menu_card.dart';
 import 'package:geo_forest_surveillance/services/sync_service.dart';
 import 'package:geo_forest_surveillance/models/sync_progress_model.dart';
 import 'package:geo_forest_surveillance/providers/gerente_provider.dart';
+// =======================================================
+// >> IMPORT ADICIONADO AQUI <<
+// =======================================================
+import 'package:geo_forest_surveillance/pages/importacao/import_page.dart';
+
 
 class HomePage extends StatefulWidget {
   final String title;
@@ -50,7 +55,9 @@ class _HomePageState extends State<HomePage> {
             
             if (progress?.concluido == true) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                Navigator.of(dialogContext).pop(); 
+                if (Navigator.of(dialogContext).canPop()) {
+                  Navigator.of(dialogContext).pop(); 
+                }
                 
                 if (progress?.erro == null && mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dados sincronizados com sucesso!'), backgroundColor: Colors.green,));
@@ -66,18 +73,21 @@ class _HomePageState extends State<HomePage> {
               return const SizedBox.shrink(); 
             }
 
-            return AlertDialog(
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 20),
-                  Text(progress?.mensagem ?? 'Iniciando...'),
-                  if ((progress?.totalAProcessar ?? 0) > 0) ...[
-                    const SizedBox(height: 10),
-                    LinearProgressIndicator(value: (progress!.processados / progress.totalAProcessar)),
-                  ]
-                ],
+            return PopScope(
+              canPop: false,
+              child: AlertDialog(
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 20),
+                    Text(progress?.mensagem ?? 'Iniciando...'),
+                    if ((progress?.totalAProcessar ?? 0) > 0) ...[
+                      const SizedBox(height: 10),
+                      LinearProgressIndicator(value: (progress!.processados / progress.totalAProcessar)),
+                    ]
+                  ],
+                ),
               ),
             );
           },
@@ -116,6 +126,8 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final licenseProvider = context.watch<LicenseProvider>();
     final bool podeAnalisar = licenseProvider.licenseData?.features['analise'] ?? true;
+    // Adicionamos uma verificação para saber se o usuário é gerente
+    final bool isGerente = licenseProvider.licenseData?.cargo == 'gerente';
 
     return Scaffold(
       appBar: widget.showAppBar ? AppBar(title: Text(widget.title)) : null,
@@ -147,11 +159,29 @@ class _HomePageState extends State<HomePage> {
                   ? () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AnaliseSelecaoPage()))
                   : () => _mostrarAvisoDeUpgrade(context, "Painel de Análise"),
             ),
+            
+            // =======================================================
+            // >> LÓGICA DE IMPORTAÇÃO ADICIONADA AQUI <<
+            // =======================================================
             MenuCard(
               icon: Icons.file_upload_outlined,
               label: 'Importar Dados',
-              onTap: () { /* TODO: Lógica de importação */ },
+              onTap: () {
+                if (isGerente) {
+                  Navigator.push(context, MaterialPageRoute(
+                    builder: (context) => const ImportPage(),
+                  ));
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Apenas gerentes podem importar dados.')),
+                  );
+                }
+              },
             ),
+            // =======================================================
+            // >> FIM DA ALTERAÇÃO <<
+            // =======================================================
+
             MenuCard(
               icon: Icons.file_download_outlined,
               label: 'Exportar Relatórios',
@@ -165,8 +195,7 @@ class _HomePageState extends State<HomePage> {
              MenuCard(
               icon: _isSyncing ? Icons.sync_problem : Icons.sync,
               label: _isSyncing ? 'Sincronizando...' : 'Sincronizar Dados',
-              // <<< CORREÇÃO APLICADA AQUI >>>
-              onTap: _isSyncing ? null : () => _executarSincronizacao(),
+              onTap: _isSyncing ? null : _executarSincronizacao,
             ),
              MenuCard(
               icon: Icons.credit_card,

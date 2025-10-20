@@ -9,10 +9,10 @@ class SplashPage extends StatelessWidget {
     // A lógica é a mesma: apenas exibir uma imagem centralizada.
     // Lembre-se de criar um novo logo para o app de vigilância.
     return const Scaffold(
-      backgroundColor: Color.fromARGB(255, 243, 243, 244),
+      backgroundColor: Color.fromARGB(236, 1, 2, 9),
       body: Center(
         child: Image(
-          image: AssetImage('assets/images/logo_3.jpeg'), // <-- Troque para o seu novo logo
+          image: AssetImage('assets/images/logo_3.png'), // <-- Troque para o seu novo logo
           width: 280,
           fit: BoxFit.contain,
         ),

@@ -1,4 +1,4 @@
-// Arquivo: lib/data/datasources/local/database_helper.dart
+// Arquivo: lib/data/datasources/local/database_helper.dart (VERSÃO CORRIGIDA E ATUALIZADA)
 
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
@@ -11,7 +11,6 @@ class DatabaseHelper {
   DatabaseHelper._privateConstructor();
   factory DatabaseHelper() => _instance;
   
-  // ✅ ESTA É A LINHA QUE ESTAVA FALTANDO E CAUSOU O ERRO
   static DatabaseHelper get instance => _instance; 
 
   Future<Database> get database async => _database ??= await _initDatabase();
@@ -19,16 +18,23 @@ class DatabaseHelper {
   Future<Database> _initDatabase() async {
     return await openDatabase(
       join(await getDatabasesPath(), 'geo_dengue_monitor.db'),
-      version: 1,
+      // =======================================================
+      // >> MUDANÇA 1: VERSÃO DO BANCO ATUALIZADA <<
+      // =======================================================
+      version: 2,
       onConfigure: _onConfigure,
       onCreate: _onCreate,
+      // =======================================================
+      // >> MUDANÇA 2: onUpgrade ADICIONADO <<
+      // =======================================================
+      onUpgrade: _onUpgrade,
     );
   }
 
   Future<void> _onConfigure(Database db) async => await db.execute('PRAGMA foreign_keys = ON');
 
   Future<void> _onCreate(Database db, int version) async {
-    // A estrutura das suas tabelas de dengue permanece a mesma
+    // Este método agora cria o banco de dados já na versão 2
     await db.execute('''
       CREATE TABLE campanhas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,6 +45,19 @@ class DatabaseHelper {
         status TEXT NOT NULL DEFAULT 'ativa'
       )
     ''');
+    
+    // =======================================================
+    // >> MUDANÇA 3: NOVA TABELA 'postos' CRIADA <<
+    // =======================================================
+    await db.execute('''
+      CREATE TABLE postos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        licenseId TEXT NOT NULL,
+        nome TEXT NOT NULL,
+        UNIQUE(licenseId, nome)
+      )
+    ''');
+    
     await db.execute('''
       CREATE TABLE acoes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,16 +78,24 @@ class DatabaseHelper {
         FOREIGN KEY (acaoId) REFERENCES acoes (id) ON DELETE CASCADE
       )
     ''');
+
+    // =======================================================
+    // >> MUDANÇA 4: TABELA 'bairros' ATUALIZADA <<
+    // =======================================================
     await db.execute('''
       CREATE TABLE bairros (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         municipioId TEXT NOT NULL,
         acaoId INTEGER NOT NULL,
+        postoId INTEGER,
         nome TEXT NOT NULL,
         responsavelSetor TEXT,
-        FOREIGN KEY (municipioId, acaoId) REFERENCES municipios (id, acaoId) ON DELETE CASCADE
+        geometria TEXT,
+        FOREIGN KEY (municipioId, acaoId) REFERENCES municipios (id, acaoId) ON DELETE CASCADE,
+        FOREIGN KEY (postoId) REFERENCES postos (id) ON DELETE SET NULL
       )
     ''');
+
     await db.execute('''
       CREATE TABLE focos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,6 +120,26 @@ class DatabaseHelper {
     ''');
     await db.execute('CREATE INDEX idx_focos_bairroId ON focos(bairroId)');
     await db.execute('CREATE INDEX idx_focos_campanhaId ON focos(campanhaId)');
+  }
+
+  // =======================================================
+  // >> MUDANÇA 5: NOVA FUNÇÃO _onUpgrade IMPLEMENTADA <<
+  // =======================================================
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // Cria a nova tabela 'postos'
+      await db.execute('''
+        CREATE TABLE postos (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          licenseId TEXT NOT NULL,
+          nome TEXT NOT NULL,
+          UNIQUE(licenseId, nome)
+        )
+      ''');
+      // Adiciona as novas colunas à tabela 'bairros'
+      await db.execute('ALTER TABLE bairros ADD COLUMN postoId INTEGER REFERENCES postos(id) ON DELETE SET NULL');
+      await db.execute('ALTER TABLE bairros ADD COLUMN geometria TEXT');
+    }
   }
   
   Future<void> deleteDatabaseFile() async {

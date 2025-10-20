@@ -1,4 +1,4 @@
-// lib/main.dart (VERSÃO COMPLETA E CORRIGIDA PARA GEO DENGUE MONITOR)
+// lib/main.dart (VERSÃO CORRIGIDA)
 
 import 'dart:io';
 import 'package:flutter/foundation.dart';

@@ -1,4 +1,4 @@
-// lib/pages/planejamento/selecao_acao_mapa_page.dart
+// lib/pages/planejamento/selecao_acao_mapa_page.dart (VERSÃO CORRIGIDA)
 
 import 'package:flutter/material.dart';
 import 'package:geo_forest_surveillance/providers/map_provider.dart';
@@ -10,8 +10,7 @@ import 'package:geo_forest_surveillance/data/repositories/acao_repository.dart';
 import 'package:geo_forest_surveillance/models/acao_model.dart';
 import 'package:geo_forest_surveillance/models/campanha_model.dart';
 import 'package:geo_forest_surveillance/providers/license_provider.dart';
-// import 'package:geo_forest_surveillance/providers/map_provider.dart';
-import 'package:geo_forest_surveillance/pages/planejamento/mapa_planejamento_page.dart'; // Será criada a seguir
+import 'package:geo_forest_surveillance/pages/planejamento/mapa_planejamento_page.dart';
 
 
 class SelecaoAcaoMapaPage extends StatefulWidget {
@@ -42,14 +41,16 @@ class _SelecaoAcaoMapaPageState extends State<SelecaoAcaoMapaPage> {
     final licenseId = licenseProvider.licenseData?.id;
     final isGerente = licenseProvider.licenseData?.cargo == 'gerente';
 
-    if (licenseId == null) {
+    // Para o caso de teste onde a licença pode ainda não estar carregada, 
+    // ou em modo de teste, permitimos que o gerente veja tudo.
+    if (licenseId == null && !isGerente) {
       setState(() => _campanhasFuture = Future.value([]));
       return;
     }
     
     setState(() {
       // Se for gerente, busca todas. Se for equipe, busca apenas as da sua licença.
-      _campanhasFuture = isGerente 
+      _campanhasFuture = (isGerente || licenseId == null)
           ? _campanhaRepository.getTodasAsCampanhasParaGerente()
           : _campanhaRepository.getTodasCampanhas(licenseId);
     });
@@ -68,18 +69,19 @@ class _SelecaoAcaoMapaPageState extends State<SelecaoAcaoMapaPage> {
     }
   }
 
+  // A correção acontece dentro desta função
   void _navegarParaMapa(Acao acao) {
-    // <<< SUBSTITUA A LÓGICA ANTIGA POR ESTA >>>
     final mapProvider = Provider.of<MapProvider>(context, listen: false);
 
-    // Limpa dados de mapas anteriores e define a ação atual
     mapProvider.clearAllMapData();
     mapProvider.setCurrentAcao(acao);
     
-    // Carrega os pontos (focos) salvos localmente para esta ação
-    mapProvider.loadPontosParaAcao(); 
+    // =======================================================
+    // >> CORREÇÃO APLICADA AQUI <<
+    // =======================================================
+    // Carrega os polígonos e pontos para a ação selecionada
+    mapProvider.loadDataForAcao(); 
 
-    // Navega para a nova página do mapa
     Navigator.push(
       context,
       MaterialPageRoute(

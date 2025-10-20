@@ -1,28 +1,33 @@
-// lib/models/bairro_model.dart
+// lib/models/bairro_model.dart (VERSÃO CORRIGIDA E ATUALIZADA)
 
 class Bairro {
   final int? id;
   final String municipioId;
-  final int acaoId; // ID da Ação/Ciclo
-  final String nome; // Ex: "Centro", "Jd. Europa", "Setor 05"
+  final int acaoId;
+  final int? postoId; // <<< CAMPO ADICIONADO
+  final String nome;
   final String? responsavelSetor;
+  final String? geometria; // <<< CAMPO ADICIONADO
 
   Bairro({
     this.id,
     required this.municipioId,
     required this.acaoId,
+    this.postoId, // <<< ATUALIZADO
     required this.nome,
     this.responsavelSetor,
+    this.geometria, // <<< ATUALIZADO
   });
 
-  // <<< CORREÇÃO AQUI: MÉTODOS ADICIONADOS >>>
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'municipioId': municipioId,
       'acaoId': acaoId,
+      'postoId': postoId, // <<< ADICIONADO
       'nome': nome,
       'responsavelSetor': responsavelSetor,
+      'geometria': geometria, // <<< ADICIONADO
     };
   }
 
@@ -31,8 +36,10 @@ class Bairro {
       id: map['id'],
       municipioId: map['municipioId'],
       acaoId: map['acaoId'],
+      postoId: map['postoId'], // <<< ADICIONADO
       nome: map['nome'],
       responsavelSetor: map['responsavelSetor'],
+      geometria: map['geometria'], // <<< ADICIONADO
     );
   }
 }
