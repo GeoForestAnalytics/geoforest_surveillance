@@ -2,11 +2,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 // Imports da Lógica de Dengue
 import 'package:geo_forest_surveillance/data/repositories/campanha_repository.dart';
 import 'package:geo_forest_surveillance/models/campanha_model.dart';
 import 'package:geo_forest_surveillance/providers/license_provider.dart';
+
+enum TipoProjeto { cadastro, vigilancia }
 
 class FormCampanhaPage extends StatefulWidget {
   final Campanha? campanhaParaEditar;
@@ -24,11 +27,18 @@ class FormCampanhaPage extends StatefulWidget {
 
 class _FormCampanhaPageState extends State<FormCampanhaPage> {
   final _formKey = GlobalKey<FormState>();
-  final _nomeController = TextEditingController();
-  final _orgaoResponsavelController = TextEditingController();
-
   final _campanhaRepository = CampanhaRepository();
   bool _isSaving = false;
+
+  // Controladores
+  final _nomeController = TextEditingController();
+  final _orgaoController = TextEditingController();
+  final _responsavelTecnicoController = TextEditingController();
+
+  // Variáveis de estado
+  TipoProjeto _tipoProjetoSelecionado = TipoProjeto.vigilancia;
+  String _tipoVigilanciaSelecionada = 'dengue';
+  Color _corSetorSelecionada = const Color(0xFF00838F); // Cor padrão
 
   @override
   void initState() {
@@ -36,70 +46,107 @@ class _FormCampanhaPageState extends State<FormCampanhaPage> {
     if (widget.isEditing) {
       final campanha = widget.campanhaParaEditar!;
       _nomeController.text = campanha.nome;
-      _orgaoResponsavelController.text = campanha.orgaoResponsavel;
+      _orgaoController.text = campanha.orgaoResponsavel;
+      _responsavelTecnicoController.text = campanha.responsavelTecnico ?? '';
+      
+      if (campanha.tipoCampanha == 'cadastro') {
+        _tipoProjetoSelecionado = TipoProjeto.cadastro;
+      } else {
+        _tipoProjetoSelecionado = TipoProjeto.vigilancia;
+        _tipoVigilanciaSelecionada = campanha.tipoCampanha;
+      }
+
+      if (campanha.corSetor != null) {
+        _corSetorSelecionada = Color(int.parse(campanha.corSetor!));
+      }
     }
   }
 
   @override
   void dispose() {
     _nomeController.dispose();
-    _orgaoResponsavelController.dispose();
+    _orgaoController.dispose();
+    _responsavelTecnicoController.dispose();
     super.dispose();
   }
 
   Future<void> _salvarCampanha() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isSaving = true);
+    if (!_formKey.currentState!.validate()) return;
+    
+    setState(() => _isSaving = true);
 
-      try {
-        final licenseId = context.read<LicenseProvider>().licenseData?.id;
-        if (licenseId == null) {
-          throw Exception("Não foi possível identificar a licença do usuário.");
-        }
+    try {
+      final licenseId = context.read<LicenseProvider>().licenseData?.id;
+      if (licenseId == null) throw Exception("Licença do usuário não identificada.");
 
-        final campanha = Campanha(
-          id: widget.isEditing ? widget.campanhaParaEditar!.id : null,
-          licenseId: widget.isEditing ? widget.campanhaParaEditar!.licenseId : licenseId,
-          nome: _nomeController.text.trim(),
-          orgaoResponsavel: _orgaoResponsavelController.text.trim(),
-          dataCriacao: widget.isEditing ? widget.campanhaParaEditar!.dataCriacao : DateTime.now(),
-          status: widget.isEditing ? widget.campanhaParaEditar!.status : 'ativa',
-        );
-        
-        if (widget.isEditing) {
-          await _campanhaRepository.updateCampanha(campanha);
-        } else {
-          await _campanhaRepository.insertCampanha(campanha);
-        }
+      // Define o tipo final da campanha com base na seleção do usuário
+      final String tipoFinal = _tipoProjetoSelecionado == TipoProjeto.cadastro
+          ? 'cadastro'
+          : _tipoVigilanciaSelecionada;
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Campanha ${widget.isEditing ? "atualizada" : "criada"} com sucesso!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          Navigator.of(context).pop(true);
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erro ao salvar campanha: $e'), backgroundColor: Colors.red),
-          );
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isSaving = false);
-        }
+      final campanha = Campanha(
+        id: widget.isEditing ? widget.campanhaParaEditar!.id : null,
+        licenseId: widget.isEditing ? widget.campanhaParaEditar!.licenseId : licenseId,
+        nome: _nomeController.text.trim(),
+        orgaoResponsavel: _orgaoController.text.trim(),
+        dataCriacao: widget.isEditing ? widget.campanhaParaEditar!.dataCriacao : DateTime.now(),
+        status: widget.isEditing ? widget.campanhaParaEditar!.status : 'ativa',
+        // Salvando os novos campos
+        tipoCampanha: tipoFinal,
+        responsavelTecnico: _responsavelTecnicoController.text.trim(),
+        corSetor: '0x${_corSetorSelecionada.value.toRadixString(16)}',
+      );
+      
+      if (widget.isEditing) {
+        await _campanhaRepository.updateCampanha(campanha);
+      } else {
+        await _campanhaRepository.insertCampanha(campanha);
       }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Projeto ${widget.isEditing ? "atualizado" : "criado"} com sucesso!'),
+          backgroundColor: Colors.green,
+        ));
+        Navigator.of(context).pop(true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Erro ao salvar projeto: $e'), backgroundColor: Colors.red,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  void _abrirSeletorDeCor() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Selecione uma cor'),
+        content: SingleChildScrollView(
+          child: ColorPicker(
+            pickerColor: _corSetorSelecionada,
+            onColorChanged: (color) => setState(() => _corSetorSelecionada = color),
+          ),
+        ),
+        actions: <Widget>[
+          ElevatedButton(
+            child: const Text('OK'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.isEditing ? 'Editar Campanha' : 'Nova Campanha'),
+        title: Text(widget.isEditing ? 'Editar Projeto' : 'Novo Projeto'),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -108,34 +155,87 @@ class _FormCampanhaPageState extends State<FormCampanhaPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // 1. SELEÇÃO DO TIPO DE PROJETO
+              _buildSectionTitle('1. Tipo de Projeto'),
+              SegmentedButton<TipoProjeto>(
+                segments: const [
+                  ButtonSegment(value: TipoProjeto.vigilancia, label: Text('Vigilância'), icon: Icon(Icons.bug_report_outlined)),
+                  ButtonSegment(value: TipoProjeto.cadastro, label: Text('Cadastro'), icon: Icon(Icons.add_home_outlined)),
+                ],
+                selected: {_tipoProjetoSelecionado},
+                onSelectionChanged: (newSelection) => setState(() => _tipoProjetoSelecionado = newSelection.first),
+              ),
+              const SizedBox(height: 24),
+
+              // 2. DETALHES DO PROJETO
+              _buildSectionTitle('2. Detalhes do Projeto'),
+              
+              // Campo que aparece dinamicamente
+              if (_tipoProjetoSelecionado == TipoProjeto.vigilancia)
+                DropdownButtonFormField<String>(
+                  value: _tipoVigilanciaSelecionada,
+                  decoration: const InputDecoration(labelText: 'Tipo de Vigilância/Inquérito', border: OutlineInputBorder()),
+                  items: const [
+                    DropdownMenuItem(value: 'dengue', child: Text('Dengue (Focos)')),
+                    DropdownMenuItem(value: 'covid', child: Text('COVID-19')),
+                    DropdownMenuItem(value: 'outra', child: Text('Outra Endemia')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _tipoVigilanciaSelecionada = value);
+                  },
+                ),
+              
+              if (_tipoProjetoSelecionado == TipoProjeto.vigilancia)
+                const SizedBox(height: 16),
+              
               TextFormField(
                 controller: _nomeController,
-                decoration: const InputDecoration(
-                  labelText: 'Nome da Campanha',
-                  hintText: 'Ex: Campanha de Verão 2025',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.campaign_outlined),
+                decoration: InputDecoration(
+                  labelText: 'Nome do Projeto',
+                  hintText: _tipoProjetoSelecionado == TipoProjeto.cadastro ? 'Ex: Cadastro Geral 2025' : 'Ex: Campanha Dengue Verão 2025',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.campaign_outlined),
                 ),
-                validator: (value) => (value == null || value.trim().isEmpty) ? 'O nome da campanha é obrigatório.' : null,
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'O nome é obrigatório.' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
-                controller: _orgaoResponsavelController,
+                controller: _orgaoController,
                 decoration: const InputDecoration(
-                  labelText: 'Órgão Responsável',
-                  hintText: 'Ex: Secretaria de Saúde do Município',
+                  labelText: 'Posto de Saúde / Unidade Responsável',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.corporate_fare_outlined),
                 ),
-                validator: (value) => (value == null || value.trim().isEmpty) ? 'O órgão responsável é obrigatório.' : null,
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'O órgão é obrigatório.' : null,
               ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _responsavelTecnicoController,
+                decoration: const InputDecoration(
+                  labelText: 'Responsável Técnico (Opcional)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // 3. CONFIGURAÇÕES ADICIONAIS
+              _buildSectionTitle('3. Configurações Adicionais'),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Cor dos Setores no Mapa'),
+                subtitle: const Text('Selecione uma cor para identificar as áreas deste projeto.'),
+                trailing: CircleAvatar(backgroundColor: _corSetorSelecionada),
+                onTap: _abrirSeletorDeCor,
+              ),
+
               const SizedBox(height: 32),
               ElevatedButton.icon(
                 onPressed: _isSaving ? null : _salvarCampanha,
                 icon: _isSaving
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.save_outlined),
-                label: Text(_isSaving ? 'Salvando...' : (widget.isEditing ? 'Atualizar' : 'Salvar')),
+                label: Text(_isSaving ? 'Salvando...' : (widget.isEditing ? 'Atualizar Projeto' : 'Salvar Projeto')),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   textStyle: const TextStyle(fontSize: 16),
@@ -143,6 +243,18 @@ class _FormCampanhaPageState extends State<FormCampanhaPage> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+          color: Theme.of(context).colorScheme.primary,
         ),
       ),
     );
