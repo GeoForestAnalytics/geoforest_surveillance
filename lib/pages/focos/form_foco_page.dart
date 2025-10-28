@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:gal/gal.dart';
+import 'package:permission_handler/permission_handler.dart'; // <<< IMPORT ADICIONADO
 
 import 'package:geo_forest_surveillance/models/bairro_model.dart';
 import 'package:geo_forest_surveillance/models/foco_dengue_model.dart';
@@ -91,29 +92,58 @@ class _FormFocoPageState extends State<FormFocoPage> {
     super.dispose();
   }
 
+  // =======================================================
+  // >> LÓGICA DE PERMISSÃO COMPLETAMENTE REFEITA AQUI <<
+  // =======================================================
   Future<void> _pickImage(ImageSource source) async {
-    final bool hasPermission = await _permissionService.requestStoragePermission();
-    if (!hasPermission && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permissão de armazenamento/câmera negada.'), backgroundColor: Colors.red));
-      return;
-    }
+    final status = await _permissionService.requestStoragePermission();
 
-    final XFile? pickedFile = await _picker.pickImage(source: source, imageQuality: 85, maxWidth: 1280);
-    if (pickedFile == null || !mounted) return;
+    if (status.isGranted) {
+      final XFile? pickedFile = await _picker.pickImage(source: source, imageQuality: 85, maxWidth: 1280);
+      if (pickedFile == null || !mounted) return;
 
-    try {
-      await Gal.putImage(pickedFile.path);
-
-      setState(() {
-        _photoPaths.add(pickedFile.path);
-      });
-      
-      if(mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Foto salva na galeria e anexada!'), backgroundColor: Colors.green));
+      try {
+        await Gal.putImage(pickedFile.path);
+        setState(() {
+          _photoPaths.add(pickedFile.path);
+        });
+        
+        if(mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Foto salva na galeria e anexada!'), backgroundColor: Colors.green));
+        }
+      } catch (e) {
+        if(mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar foto: $e'), backgroundColor: Colors.red));
+        }
       }
-    } catch (e) {
-      if(mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar foto: $e'), backgroundColor: Colors.red));
+    } else if (status.isPermanentlyDenied) {
+      if (mounted) {
+        // Exibe um diálogo que leva o usuário para as configurações do app
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Permissão Necessária'),
+            content: const Text('Para adicionar fotos, o aplicativo precisa de acesso à sua câmera e galeria. Por favor, habilite a permissão nas configurações do seu dispositivo.'),
+            actions: [
+              TextButton(
+                child: const Text('Cancelar'),
+                onPressed: () => Navigator.of(ctx).pop(),
+              ),
+              FilledButton(
+                child: const Text('Abrir Configurações'),
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  openAppSettings(); // Função do pacote permission_handler
+                },
+              ),
+            ],
+          ),
+        );
+      }
+    } else {
+      // Caso a permissão seja apenas 'denied' (não permanentemente)
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Permissão de armazenamento/câmera negada.'), backgroundColor: Colors.red));
       }
     }
   }
@@ -159,10 +189,6 @@ class _FormFocoPageState extends State<FormFocoPage> {
     }
   }
   
-  // ==========================================================
-  // INÍCIO DAS FUNÇÕES QUE ESTAVAM FALTANDO
-  // ==========================================================
-
   Future<void> _obterLocalizacaoAtual() async {
     setState(() { _buscandoLocalizacao = true; _erroLocalizacao = null; });
     try {
@@ -211,11 +237,7 @@ class _FormFocoPageState extends State<FormFocoPage> {
       case StatusFoco.semFoco: return 'Sem Foco Encontrado';
     }
   }
-
-  // ==========================================================
-  // FIM DAS FUNÇÕES QUE ESTAVAM FALTANDO
-  // ==========================================================
-
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(

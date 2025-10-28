@@ -8,11 +8,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:permission_handler/permission_handler.dart'; // <<< IMPORT NECESSÁRIO
 
 import 'package:geo_forest_surveillance/models/foco_dengue_model.dart';
 import 'package:geo_forest_surveillance/data/repositories/foco_repository.dart';
 import 'package:geo_forest_surveillance/services/permission_service.dart';
 import 'package:geo_forest_surveillance/widgets/progress_dialog.dart';
+
+// NOTA DE EVOLUÇÃO: Este serviço atualmente exporta dados do modelo antigo (Focos de Dengue).
+// Em um próximo passo, criaremos novas funções aqui para exportar os dados das
+// novas tabelas 'imoveis' e 'visitas'.
 
 // Classe de payload para passar dados para o isolate
 class _CsvFocoPayload {
@@ -54,7 +59,20 @@ class ExportService {
 
   Future<void> exportarFocosCsv(BuildContext context) async {
     try {
-      if (!await _permissionService.requestStoragePermission()) return;
+      // =======================================================
+      // >> CORREÇÃO APLICADA AQUI <<
+      // Verificamos a propriedade .isGranted do PermissionStatus retornado.
+      // =======================================================
+      final PermissionStatus status = await _permissionService.requestStoragePermission();
+      if (!status.isGranted) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Permissão de armazenamento negada. Exportação cancelada.'),
+            backgroundColor: Colors.orange,
+          ));
+        }
+        return;
+      }
       
       ProgressDialog.show(context, 'Buscando e preparando dados...');
       

@@ -10,16 +10,12 @@ import 'package:sqflite/sqflite.dart';
 import 'package:geo_forest_surveillance/models/campanha_model.dart';
 import 'package:geo_forest_surveillance/models/acao_model.dart';
 import 'package:geo_forest_surveillance/models/bairro_model.dart';
-import 'package:geo_forest_surveillance/models/municipio_model.dart'; // <<< ADICIONADO
+import 'package:geo_forest_surveillance/models/municipio_model.dart';
 import 'package:geo_forest_surveillance/providers/license_provider.dart';
 import 'package:geo_forest_surveillance/data/datasources/local/database_helper.dart';
 
 class ImportController with ChangeNotifier {
   final BuildContext context;
-  // =======================================================
-  // >> CORREÇÃO 1: REMOVIDA A INICIALIZAÇÃO DO DB AQUI <<
-  // Acessaremos o banco de forma assíncrona dentro da função
-  // =======================================================
 
   ImportController(this.context);
 
@@ -41,7 +37,7 @@ class ImportController with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<Map<String, dynamic>> validarGeoJson(File geojsonFile) async {
+  Future<Map<String, dynamic>> _validarGeoJsonGenerico(File geojsonFile) async {
     try {
       final content = await geojsonFile.readAsString();
       final data = jsonDecode(content) as Map<String, dynamic>;
@@ -49,42 +45,55 @@ class ImportController with ChangeNotifier {
       if (data['type'] != 'FeatureCollection' || data['features'] is! List || (data['features'] as List).isEmpty) {
         throw Exception("O arquivo não é uma FeatureCollection válida ou está vazio.");
       }
-      
-      final firstFeature = (data['features'] as List).first as Map<String, dynamic>;
-      final properties = firstFeature['properties'] as Map<String, dynamic>?;
-
-      if (properties == null || properties['posto_saud'] == null || properties['setor_nome'] == null) {
-        throw Exception("As propriedades 'posto_saud' e 'setor_nome' são obrigatórias em cada feature do GeoJSON.");
-      }
       return data;
     } catch (e) {
-      // Repassa o erro com uma mensagem mais amigável
-      throw Exception("Erro ao ler ou validar o arquivo GeoJSON. Verifique o formato. Detalhe: ${e.toString()}");
+      throw Exception("Erro ao ler o arquivo GeoJSON. Verifique o formato. Detalhe: ${e.toString()}");
     }
   }
+
+  Future<Map<String, dynamic>> validarGeoJsonPoligonos(File geojsonFile) async {
+    final data = await _validarGeoJsonGenerico(geojsonFile);
+    final firstFeature = (data['features'] as List).first as Map<String, dynamic>;
+    final properties = firstFeature['properties'] as Map<String, dynamic>?;
+
+    if (properties == null || properties['posto_saud'] == null || properties['setor_nome'] == null) {
+      throw Exception("As propriedades 'posto_saud' e 'setor_nome' são obrigatórias em cada feature do GeoJSON de polígonos.");
+    }
+    return data;
+  }
   
+  Future<Map<String, dynamic>> validarGeoJsonPontos(File geojsonFile) async {
+    final data = await _validarGeoJsonGenerico(geojsonFile);
+    final firstFeature = (data['features'] as List).first as Map<String, dynamic>;
+    final properties = firstFeature['properties'] as Map<String, dynamic>?;
+    final geometryType = firstFeature['geometry']?['type'];
+
+    if (properties == null || properties['posto_saud'] == null) {
+      throw Exception("A propriedade 'posto_saud' é obrigatória em cada feature do GeoJSON de pontos.");
+    }
+    if (geometryType != 'Point') {
+      throw Exception("A geometria esperada para este arquivo é do tipo 'Point'.");
+    }
+    return data;
+  }
+
   Future<bool> processarImportacao({
     required File geojsonFile,
     required String nomeCampanha,
     required String orgao,
     required String nomeAcao,
     required String municipioIdPadrao,
-    required String municipioNome, // <<< ADICIONADO
-    required String municipioUf,   // <<< ADICIONADO
+    required String municipioNome,
+    required String municipioUf,
   }) async {
     _setLoading(true);
 
     try {
-      final mapa = await validarGeoJson(geojsonFile);
+      final mapa = await validarGeoJsonPoligonos(geojsonFile);
       final licenseId = context.read<LicenseProvider>().licenseData!.id;
-      
-      // =======================================================
-      // >> CORREÇÃO 2: OBTÉM INSTÂNCIA DO BANCO AQUI <<
-      // =======================================================
       final db = await DatabaseHelper.instance.database;
 
       await db.transaction((txn) async {
-        // PASSO A: CRIAR A BASE (CAMPANHA, AÇÃO E MUNICÍPIO)
         final novaCampanha = Campanha(licenseId: licenseId, nome: nomeCampanha, orgaoResponsavel: orgao, dataCriacao: DateTime.now());
         final campanhaId = await txn.insert('campanhas', novaCampanha.toMap());
 
@@ -94,7 +103,6 @@ class ImportController with ChangeNotifier {
         final novoMunicipio = Municipio(id: municipioIdPadrao, acaoId: acaoId, nome: municipioNome, uf: municipioUf);
         await txn.insert('municipios', novoMunicipio.toMap(), conflictAlgorithm: ConflictAlgorithm.ignore);
         
-        // PASSO B: PROCESSAR CADA SETOR DO MAPA
         final Map<String, int> postosJaProcessados = {};
 
         for (var feature in mapa['features']) {
@@ -105,9 +113,6 @@ class ImportController with ChangeNotifier {
           final nomeSetor = properties['setor_nome'] as String;
           int postoId;
 
-          // =======================================================
-          // >> CORREÇÃO 3: LÓGICA "GET OR CREATE" IMPLEMENTADA <<
-          // =======================================================
           if (postosJaProcessados.containsKey(nomePosto)) {
             postoId = postosJaProcessados[nomePosto]!;
           } else {
@@ -127,9 +132,6 @@ class ImportController with ChangeNotifier {
             postosJaProcessados[nomePosto] = postoId;
           }
 
-          // =======================================================
-          // >> CORREÇÃO 4: CRIAÇÃO DO BAIRRO COM OS NOVOS CAMPOS <<
-          // =======================================================
           final novoBairro = Bairro(
             acaoId: acaoId,
             municipioId: municipioIdPadrao,
@@ -142,11 +144,66 @@ class ImportController with ChangeNotifier {
       });
 
       _setLoading(false);
-      return true; // Sucesso
+      return true;
 
     } catch (e) {
       _setError("Falha na importação: ${e.toString()}");
-      return false; // Falha
+      return false;
+    }
+  }
+
+  // =======================================================
+  // >> NOVO MÉTODO ADICIONADO AQUI <<
+  // =======================================================
+  Future<bool> processarImportacaoDePontos({
+    required File geojsonFile,
+  }) async {
+    _setLoading(true);
+
+    try {
+      final mapa = await validarGeoJsonPontos(geojsonFile); 
+      final licenseId = context.read<LicenseProvider>().licenseData!.id;
+      final db = await DatabaseHelper.instance.database;
+
+      int postosAtualizados = 0;
+
+      await db.transaction((txn) async {
+        for (var feature in mapa['features']) {
+          if (feature['geometry']?['type'] != 'Point') continue;
+
+          final properties = feature['properties'];
+          final geometria = feature['geometry'];
+          
+          final nomePosto = properties['posto_saud'] as String?;
+          if (nomePosto == null || nomePosto.isEmpty) continue;
+
+          final coordinates = geometria['coordinates'] as List;
+          final longitude = coordinates[0] as double;
+          final latitude = coordinates[1] as double;
+
+          final count = await txn.update(
+            'postos',
+            {
+              'latitude': latitude,
+              'longitude': longitude,
+            },
+            where: 'nome = ? AND licenseId = ?',
+            whereArgs: [nomePosto, licenseId],
+          );
+          
+          if (count > 0) {
+            postosAtualizados++;
+          }
+        }
+      });
+
+      _setLoading(false);
+      debugPrint("$postosAtualizados postos de saúde foram atualizados com coordenadas.");
+      return true;
+
+    } catch (e) {
+      _setError("Falha na importação dos pontos: ${e.toString()}");
+      return false;
     }
   }
 }

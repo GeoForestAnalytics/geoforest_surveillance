@@ -10,10 +10,11 @@ import 'package:geo_forest_surveillance/models/bairro_model.dart';
 import 'package:geo_forest_surveillance/data/repositories/municipio_repository.dart';
 import 'package:geo_forest_surveillance/data/repositories/bairro_repository.dart';
 import 'package:geo_forest_surveillance/pages/bairros/form_bairro_page.dart';
-// =======================================================
-// >> IMPORT ADICIONADO AQUI <<
-// =======================================================
 import 'package:geo_forest_surveillance/models/setor_com_posto_viewmodel.dart';
+// =======================================================
+// >> IMPORT DA NOVA PÁGINA DE FORMULÁRIO DE IMÓVEL <<
+// =======================================================
+import 'package:geo_forest_surveillance/pages/cadastro/form_imovel_page.dart';
 
 
 class DetalhesMunicipioPage extends StatefulWidget {
@@ -36,11 +37,7 @@ class _DetalhesMunicipioPageState extends State<DetalhesMunicipioPage> {
   final _municipioRepository = MunicipioRepository();
   final _bairroRepository = BairroRepository();
 
-  // O Future para buscar o município continua o mesmo
   late Future<List<Municipio>> _municipioFuture; 
-  // =======================================================
-  // >> TIPO DO FUTURE DE BAIRROS ATUALIZADO <<
-  // =======================================================
   late Future<List<SetorComPosto>> _setoresFuture;
 
   @override
@@ -51,11 +48,7 @@ class _DetalhesMunicipioPageState extends State<DetalhesMunicipioPage> {
 
   void _carregarDados() {
     setState(() {
-      // A busca pelo município continua igual
       _municipioFuture = _municipioRepository.getMunicipiosDaAcao(widget.acaoId);
-      // =======================================================
-      // >> CHAMADA AO NOVO MÉTODO DO REPOSITORY <<
-      // =======================================================
       _setoresFuture = _bairroRepository.getSetoresComPosto(widget.municipioId, widget.acaoId);
     });
   }
@@ -68,6 +61,20 @@ class _DetalhesMunicipioPageState extends State<DetalhesMunicipioPage> {
     if (foiCriado == true && mounted) {
       _carregarDados();
     }
+  }
+
+  // =======================================================
+  // >> NOVA FUNÇÃO PARA NAVEGAR PARA O CADASTRO DE IMÓVEL <<
+  // =======================================================
+  void _navegarParaNovoImovel() async {
+    // Note que não precisamos recarregar os dados desta tela após o cadastro
+    // de um imóvel, pois esta tela não exibe a lista de imóveis.
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const FormImovelPage(), // bairroId é opcional
+      ),
+    );
   }
   
   void _navegarParaDetalhesBairro(Bairro bairro) {
@@ -115,7 +122,6 @@ class _DetalhesMunicipioPageState extends State<DetalhesMunicipioPage> {
                       const Divider(height: 20),
                       Text("Município: ${municipio.nome} - ${municipio.uf}", style: Theme.of(context).textTheme.bodyLarge),
                       const SizedBox(height: 8),
-                      // Mantido o ID do Setor, que neste contexto é o ID do Município na Ação
                       Text("ID do Setor: ${municipio.id}", style: Theme.of(context).textTheme.bodyLarge),
                     ],
                   ),
@@ -126,9 +132,6 @@ class _DetalhesMunicipioPageState extends State<DetalhesMunicipioPage> {
                 child: Text("Bairros / Quadras", style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Theme.of(context).colorScheme.primary)),
               ),
               Expanded(
-                // =======================================================
-                // >> FUTUREBUILDER ATUALIZADO PARA 'SetorComPosto' <<
-                // =======================================================
                 child: FutureBuilder<List<SetorComPosto>>(
                   future: _setoresFuture,
                   builder: (context, setoresSnapshot) {
@@ -157,9 +160,6 @@ class _DetalhesMunicipioPageState extends State<DetalhesMunicipioPage> {
                             child: ListTile(
                               leading: const Icon(Icons.holiday_village_outlined),
                               title: Text(bairro.nome, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              // =======================================================
-                              // >> SUBTÍTULO CORRIGIDO PARA MOSTRAR O NOME DO POSTO <<
-                              // =======================================================
                               subtitle: Text('Posto: ${setorInfo.nomePosto}'),
                               trailing: const Icon(Icons.arrow_forward_ios, size: 14),
                               onTap: () => _navegarParaDetalhesBairro(bairro),
@@ -173,11 +173,28 @@ class _DetalhesMunicipioPageState extends State<DetalhesMunicipioPage> {
               ),
             ],
           ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: _navegarParaNovoBairro,
-            tooltip: 'Adicionar Bairro/Setor',
-            icon: const Icon(Icons.add),
-            label: const Text('Novo Bairro'),
+          // =======================================================
+          // >> BOTÕES DE AÇÃO FLUTUANTE MODIFICADOS AQUI <<
+          // =======================================================
+          floatingActionButton: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              FloatingActionButton.extended(
+                heroTag: 'fabImovel', // heroTag é importante quando se tem múltiplos FABs
+                onPressed: _navegarParaNovoImovel,
+                tooltip: 'Cadastrar Novo Imóvel',
+                icon: const Icon(Icons.add_home_outlined),
+                label: const Text('Novo Imóvel'),
+              ),
+              const SizedBox(height: 16),
+              FloatingActionButton.extended(
+                heroTag: 'fabBairro',
+                onPressed: _navegarParaNovoBairro,
+                tooltip: 'Adicionar Bairro/Setor',
+                icon: const Icon(Icons.add_road_outlined),
+                label: const Text('Novo Bairro'),
+              ),
+            ],
           ),
         );
       },

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 // Imports Adaptados
 import 'package:geo_forest_surveillance/models/campanha_model.dart';
@@ -11,6 +12,9 @@ import 'package:geo_forest_surveillance/models/acao_model.dart';
 import 'package:geo_forest_surveillance/data/repositories/campanha_repository.dart';
 import 'package:geo_forest_surveillance/data/repositories/acao_repository.dart';
 import 'package:geo_forest_surveillance/pages/acoes/form_acao_page.dart';
+import 'package:geo_forest_surveillance/providers/license_provider.dart';
+import 'package:geo_forest_surveillance/pages/importacao/importar_postos_page.dart';
+
 
 class DetalhesCampanhaPage extends StatefulWidget {
   // A página recebe apenas o ID da URL, conforme definido no GoRouter
@@ -91,7 +95,8 @@ class _DetalhesCampanhaPageState extends State<DetalhesCampanhaPage> {
 
   @override
   Widget build(BuildContext context) {
-    // FutureBuilder garante que a tela só será construída após os dados da campanha serem carregados
+    final isGerente = context.watch<LicenseProvider>().licenseData?.cargo == 'gerente';
+
     return FutureBuilder<Campanha?>(
       future: _campanhaFuture,
       builder: (context, snapshot) {
@@ -108,6 +113,24 @@ class _DetalhesCampanhaPageState extends State<DetalhesCampanhaPage> {
         return Scaffold(
           appBar: AppBar(
             title: Text(campanha.nome),
+            actions: [
+              if (isGerente)
+                IconButton(
+                  icon: const Icon(Icons.add_location_alt_outlined),
+                  tooltip: 'Importar Coordenadas dos Postos',
+                  onPressed: () async {
+                    final bool? importou = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ImportarPostosPage(),
+                      ),
+                    );
+                    if (importou == true) {
+                      _carregarDados();
+                    }
+                  },
+                ),
+            ],
           ),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -195,12 +218,18 @@ class _DetalhesCampanhaPageState extends State<DetalhesCampanhaPage> {
               ),
             ],
           ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: _navegarParaNovaAcao,
-            tooltip: 'Nova Ação',
-            icon: const Icon(Icons.add_task),
-            label: const Text('Nova Ação'),
-          ),
+          // =======================================================
+          // >> CORREÇÃO DE SINTAXE APLICADA AQUI <<
+          // O botão agora é atribuído à propriedade `floatingActionButton` do Scaffold.
+          // =======================================================
+          floatingActionButton: isGerente
+              ? FloatingActionButton.extended(
+                  onPressed: _navegarParaNovaAcao,
+                  tooltip: 'Nova Ação',
+                  icon: const Icon(Icons.add_task),
+                  label: const Text('Nova Ação'),
+                )
+              : null,
         );
       },
     );

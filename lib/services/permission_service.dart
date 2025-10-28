@@ -2,43 +2,29 @@
 
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io' show Platform;
-import 'package:device_info_plus/device_info_plus.dart';
 
 class PermissionService {
   
-  /// Solicita a permissão de armazenamento/fotos de forma robusta para diferentes versões do Android e iOS.
-  Future<bool> requestStoragePermission() async {
+  /// Solicita a permissão de armazenamento/fotos e retorna o status final.
+  /// O pacote permission_handler lida com as diferentes versões do Android internamente,
+  /// tornando a verificação manual de SDKs desnecessária na maioria dos casos.
+  Future<PermissionStatus> requestStoragePermission() async {
+    Permission permission;
+
+    // Define qual permissão solicitar com base na plataforma.
+    // O permission_handler gerencia as complexidades das versões do Android.
     if (Platform.isAndroid) {
-      final deviceInfo = await DeviceInfoPlugin().androidInfo;
-      
-      // Android 13+ (SDK 33)
-      if (deviceInfo.version.sdkInt >= 33) {
-        var photoStatus = await Permission.photos.status;
-        if (!photoStatus.isGranted) {
-          photoStatus = await Permission.photos.request();
-        }
-        return photoStatus.isGranted;
-      } 
-      // Android 11 e 12 (SDK 30-32)
-      else if (deviceInfo.version.sdkInt >= 30) {
-        var storageStatus = await Permission.manageExternalStorage.status;
-        if (!storageStatus.isGranted) {
-          storageStatus = await Permission.manageExternalStorage.request();
-        }
-        return storageStatus.isGranted;
-      } 
-      // Android 10 e inferior
-      else {
-        var status = await Permission.storage.status;
-        if (!status.isGranted) {
-          status = await Permission.storage.request();
-        }
-        return status.isGranted;
-      }
+      permission = Permission.storage;
+    } else if (Platform.isIOS) {
+      // Para iOS, a permissão de 'photos' é a correta.
+      permission = Permission.photos;
     } else {
-      // Para iOS
-      var status = await Permission.photos.request();
-      return status.isGranted;
+      // Plataforma não suportada para esta funcionalidade.
+      return PermissionStatus.denied;
     }
+
+    // Solicita a permissão e retorna o status final.
+    final status = await permission.request();
+    return status;
   }
 }
