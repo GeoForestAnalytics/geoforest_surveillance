@@ -4,9 +4,11 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
-// Imports Adaptados
+// Imports Adaptados e Novos
 import 'package:geo_forest_surveillance/models/foco_dengue_model.dart';
 import 'package:geo_forest_surveillance/models/diario_de_campo_model.dart';
+import 'package:geo_forest_surveillance/models/imovel_model.dart';
+import 'package:geo_forest_surveillance/models/visita_model.dart';
 
 class GerenteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -45,11 +47,41 @@ class GerenteService {
       subscriptions.add(subscription);
     }
 
-    controller.onCancel = () => subscriptions.forEach((sub) => sub.cancel());
+    controller.onCancel = () {
+      for (var sub in subscriptions) {
+        sub.cancel();
+      }
+    };
     return controller.stream;
   }
   
-  // Stream para os Focos de Dengue
+  // =======================================================
+  // >> NOVOS STREAMS ADICIONADOS AQUI <<
+  // =======================================================
+
+  /// Stream para os Imóveis cadastrados.
+  Stream<List<Imovel>> getImoveisStream({required List<String> licenseIds}) {
+    return _getAggregatedStream<Imovel>(
+      licenseIds: licenseIds,
+      collectionName: 'imoveis',
+      fromMap: Imovel.fromMap,
+    );
+  }
+
+  /// Stream para as Visitas realizadas.
+  Stream<List<Visita>> getVisitasStream({required List<String> licenseIds}) {
+    return _getAggregatedStream<Visita>(
+      licenseIds: licenseIds,
+      collectionName: 'visitas',
+      fromMap: Visita.fromMap,
+    );
+  }
+
+  // =======================================================
+  // >> STREAMS ANTIGOS MANTIDOS PARA COMPATIBILIDADE <<
+  // =======================================================
+
+  /// Stream para os Focos de Dengue (Modelo Legado).
   Stream<List<FocoDengue>> getFocosStream({required List<String> licenseIds}) {
     return _getAggregatedStream<FocoDengue>(
       licenseIds: licenseIds,
@@ -58,7 +90,7 @@ class GerenteService {
     );
   }
 
-  // Stream para os Diários de Campo
+  /// Stream para os Diários de Campo.
   Stream<List<DiarioDeCampo>> getDadosDiarioStream({required List<String> licenseIds}) {
     return _getAggregatedStream<DiarioDeCampo>(
       licenseIds: licenseIds,

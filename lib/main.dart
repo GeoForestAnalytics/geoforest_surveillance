@@ -19,6 +19,11 @@ import 'package:geo_forest_surveillance/providers/gerente_provider.dart';
 import 'package:geo_forest_surveillance/utils/app_router.dart';
 import 'package:geo_forest_surveillance/providers/map_provider.dart';
 import 'package:geo_forest_surveillance/providers/theme_provider.dart';
+// =======================================================
+// >> IMPORT DO NOVO PROVIDER DE FILTRO ADICIONADO <<
+// =======================================================
+import 'package:geo_forest_surveillance/providers/dashboard_filter_provider.dart';
+
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -99,12 +104,13 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => GerenteProvider()),
         ChangeNotifierProvider(create: (_) => MapProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        // =======================================================
+        // >> NOVO PROVIDER DE FILTRO ADICIONADO À LISTA <<
+        // =======================================================
+        ChangeNotifierProvider(create: (_) => DashboardFilterProvider()),
       ],
       child: Consumer<ThemeProvider>(
-        // =======================================================
-        // >> CORREÇÃO APLICADA AQUI <<
-        // =======================================================
-        builder: (context, themeProvider, child) { // <<< O 'builder' PRECISA DOS 3 ARGUMENTOS
+        builder: (context, themeProvider, child) {
           final appRouter = AppRouter(
             loginController: context.read<LoginController>(),
             licenseProvider: context.read<LicenseProvider>(),
@@ -117,7 +123,7 @@ class MyApp extends StatelessWidget {
             debugShowCheckedModeBanner: false,
             theme: _buildThemeData(Brightness.light),
             darkTheme: _buildThemeData(Brightness.dark),
-            themeMode: themeProvider.themeMode, // <<< AGORA O 'themeProvider' É RECONHECIDO
+            themeMode: themeProvider.themeMode,
           );
         },
       ),

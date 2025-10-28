@@ -16,6 +16,11 @@ import 'package:geo_forest_surveillance/data/repositories/campanha_repository.da
 import 'package:geo_forest_surveillance/data/repositories/acao_repository.dart';
 import 'package:geo_forest_surveillance/pages/cadastro/form_imovel_page.dart';
 import 'package:geo_forest_surveillance/pages/visitas/form_visita_page.dart';
+// =======================================================
+// >> IMPORT DA NOVA PÁGINA DE DETALHES <<
+// =======================================================
+import 'package:geo_forest_surveillance/pages/cadastro/detalhes_imovel_page.dart';
+
 
 class DetalhesBairroPage extends StatefulWidget {
   final int campanhaId;
@@ -59,15 +64,12 @@ class _DetalhesBairroPageState extends State<DetalhesBairroPage> {
 
   Future<void> _carregarDados() async {
     setState(() {
-      // Carrega os detalhes do Bairro, Campanha e Ação
       _bairroFuture = _getBairroDetails();
       _campanhaFuture = _campanhaRepository.getCampanhaById(widget.campanhaId);
       _acaoFuture = _acaoRepository.getAcaoById(widget.acaoId);
-      // Carrega a lista de imóveis do bairro
       _imoveisFuture = _imovelRepository.getImoveisDoBairro(widget.bairroId);
     });
 
-    // Após carregar os imóveis, busca a contagem de visitas para cada um
     final imoveis = await _imoveisFuture;
     final newCounts = <int, int>{};
     for (final imovel in imoveis) {
@@ -83,7 +85,6 @@ class _DetalhesBairroPageState extends State<DetalhesBairroPage> {
     }
   }
 
-  // Função auxiliar para obter um único bairro de forma mais segura
   Future<Bairro?> _getBairroDetails() async {
     final bairros = await _bairroRepository.getBairrosDoMunicipio(widget.municipioId, widget.acaoId);
     return bairros.firstWhereOrNull((b) => b.id == widget.bairroId);
@@ -97,7 +98,7 @@ class _DetalhesBairroPageState extends State<DetalhesBairroPage> {
       ),
     );
     if (foiCriado == true) {
-      _carregarDados(); // Recarrega a lista de imóveis
+      _carregarDados();
     }
   }
 
@@ -113,14 +114,29 @@ class _DetalhesBairroPageState extends State<DetalhesBairroPage> {
       ),
     );
     if (foiCriado == true) {
-      _carregarDados(); // Recarrega a contagem de visitas
+      _carregarDados();
+    }
+  }
+
+  // =======================================================
+  // >> NOVA FUNÇÃO DE NAVEGAÇÃO PARA DETALHES <<
+  // =======================================================
+  void _navegarParaDetalhesImovel(Imovel imovel) async {
+    // Navega para a nova tela de detalhes e, se algo for atualizado lá,
+    // recarrega os dados desta tela.
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DetalhesImovelPage(imovelId: imovel.id!),
+      ),
+    );
+    if (result == true) {
+      _carregarDados();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Usamos um FutureBuilder triplo para garantir que Bairro, Campanha e Ação estejam carregados
-    // antes de construir a tela, pois são necessários para a navegação.
     return FutureBuilder(
       future: Future.wait([_bairroFuture, _campanhaFuture, _acaoFuture]),
       builder: (context, AsyncSnapshot<List<dynamic>> snapshot) {
@@ -179,6 +195,10 @@ class _DetalhesBairroPageState extends State<DetalhesBairroPage> {
                                 onPressed: () => _navegarParaNovaVisita(imovel, campanha, acao),
                                 child: const Text('Visitar'),
                               ),
+                              // =======================================================
+                              // >> AÇÃO DE TOQUE ADICIONADA AQUI <<
+                              // =======================================================
+                              onTap: () => _navegarParaDetalhesImovel(imovel),
                             ),
                           ),
                         );

@@ -1,13 +1,19 @@
 // lib/pages/gerente/gerente_map_page.dart
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
-import 'package:geo_forest_surveillance/models/foco_dengue_model.dart';
+// Imports da nova arquitetura
 import 'package:geo_forest_surveillance/providers/gerente_provider.dart';
+// =======================================================
+// >> IMPORT CORRIGIDO PARA O LOCAL DO ENUM <<
+// =======================================================
+import 'package:geo_forest_surveillance/models/visita_model.dart';
+
 
 // Classe auxiliar para camadas do mapa
 class MapLayer {
@@ -39,7 +45,26 @@ class _GerenteMapPageState extends State<GerenteMapPage> {
   @override
   void initState() {
     super.initState();
+    // Inicia o monitoramento de dados assim que a tela é construída
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<GerenteProvider>().iniciarMonitoramento();
+    });
     _currentLayer = _mapLayers[1];
+  }
+
+  // Função adaptada para ler o status de um formulário JSON de dengue
+  StatusFoco _getStatusFromDadosFormulario(String? dadosJson) {
+    if (dadosJson == null) return StatusFoco.semFoco;
+    try {
+      final data = jsonDecode(dadosJson);
+      final statusString = data['statusFoco'];
+      return StatusFoco.values.firstWhere(
+        (e) => e.name == statusString,
+        orElse: () => StatusFoco.semFoco,
+      );
+    } catch (e) {
+      return StatusFoco.semFoco;
+    }
   }
 
   Color _getMarkerColor(StatusFoco status) {
@@ -54,6 +79,9 @@ class _GerenteMapPageState extends State<GerenteMapPage> {
       case StatusFoco.fechado:
       case StatusFoco.recusado:
         return Colors.grey.shade600;
+      // Adicionado um default para garantir que a função sempre retorne uma cor
+      default:
+        return Colors.blueGrey;
     }
   }
 
@@ -87,7 +115,7 @@ class _GerenteMapPageState extends State<GerenteMapPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mapa Geral de Focos'),
+        title: const Text('Mapa Geral de Visitas'),
         actions: [
           IconButton(icon: Icon(_currentLayer.icon), onPressed: _switchMapLayer, tooltip: 'Mudar Camada do Mapa'),
         ],
@@ -98,39 +126,42 @@ class _GerenteMapPageState extends State<GerenteMapPage> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final focos = provider.focosSincronizados; // Usamos a lista original aqui
+          final visitas = provider.visitasEnriquecidas;
 
-          if (focos.isEmpty) {
-            return const Center(child: Text('Nenhum foco sincronizado para exibir no mapa.'));
+          if (visitas.isEmpty) {
+            return const Center(child: Text('Nenhuma visita sincronizada para exibir no mapa.'));
           }
 
-          // <<< CORREÇÃO APLICADA AQUI >>>
-          // 1. Filtramos a lista para garantir que só tentaremos criar marcadores para focos com coordenadas válidas.
-          final markers = focos
-              .where((foco) => foco.latitude != 0.0 && foco.longitude != 0.0) 
-              .map<Marker>((foco) {
-            // 2. Agora, dentro do .map, o Dart sabe que `foco` tem coordenadas válidas.
+          final markers = visitas
+              .where((v) => v.imovel.latitude != 0.0 && v.imovel.longitude != 0.0) 
+              .map<Marker>((visitaEnriquecida) {
+            
+            final imovel = visitaEnriquecida.imovel;
+            final visita = visitaEnriquecida.visita;
+            
+            final status = _getStatusFromDadosFormulario(visita.dadosFormulario);
+            final color = _getMarkerColor(status);
+
             return Marker(
               width: 35.0,
               height: 35.0,
-              point: LatLng(foco.latitude, foco.longitude),
+              point: LatLng(imovel.latitude, imovel.longitude),
               child: GestureDetector(
                 onTap: () {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                     duration: const Duration(seconds: 4),
                     content: Text(
-                      // 3. Usamos o operador '??' para fornecer um valor padrão ("N/A") caso o texto seja nulo.
-                      'Bairro: ${foco.bairroNome ?? 'N/A'}\n'
-                      'Endereço: ${foco.endereco ?? 'N/A'}\n'
-                      'Status: ${foco.statusFoco.name}',
+                      'Endereço: ${imovel.logradouro}, ${imovel.numero ?? 'S/N'}\n'
+                      'Agente: ${visita.nomeAgente}\n'
+                      'Status (Dengue): ${status.name}',
                     ),
                   ));
                 },
                 child: Tooltip(
-                  message: foco.endereco ?? 'Endereço não informado',
+                  message: '${imovel.logradouro}, ${imovel.numero ?? 'S/N'}',
                   child: Icon(
                     Icons.location_pin,
-                    color: _getMarkerColor(foco.statusFoco),
+                    color: color,
                     size: 35.0,
                     shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
                   ),
@@ -176,7 +207,6 @@ class LocationMarker extends StatelessWidget {
   const LocationMarker({super.key});
   @override
   Widget build(BuildContext context) {
-    // ... (código do marcador de localização permanece o mesmo)
     return Center(
       child: Container(
         width: 20.0,

@@ -9,17 +9,21 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+// Imports da nova arquitetura
 import 'package:geo_forest_surveillance/models/acao_model.dart';
-import 'package:geo_forest_surveillance/models/foco_dengue_model.dart';
+import 'package:geo_forest_surveillance/models/imovel_model.dart';
 import 'package:geo_forest_surveillance/models/sample_point.dart';
-import 'package:geo_forest_surveillance/data/repositories/foco_repository.dart';
 import 'package:geo_forest_surveillance/data/repositories/bairro_repository.dart';
+import 'package:geo_forest_surveillance/data/repositories/imovel_repository.dart';
+import 'package:geo_forest_surveillance/data/repositories/visita_repository.dart';
 
 enum MapLayerType { ruas, satelite }
 
 class MapProvider with ChangeNotifier {
-  final _focoRepository = FocoRepository();
+  // Repositórios da nova arquitetura
   final _bairroRepository = BairroRepository();
+  final _imovelRepository = ImovelRepository();
+  final _visitaRepository = VisitaRepository();
 
   List<SamplePoint> _samplePoints = [];
   List<Polygon> _polygons = [];
@@ -66,16 +70,13 @@ class MapProvider with ChangeNotifier {
     _setLoading(true);
     _samplePoints.clear();
     _polygons.clear();
-    // =======================================================
-    // >> CORREÇÃO 1: INICIALIZAÇÃO DO BOUNDS REMOVIDA <<
-    // A variável _bounds será criada apenas se houver pontos.
-    // =======================================================
     _bounds = null;
 
-    final bairros = await _bairroRepository.getTodosBairros();
-    final bairrosDaAcao = bairros.where((b) => b.acaoId == _currentAcao!.id).toList();
     final List<LatLng> allPoints = [];
 
+    // 1. Carregar polígonos dos bairros (setores) da ação
+    final bairrosDaAcao = await _bairroRepository.getBairrosDoMunicipio('', _currentAcao!.id!); // Assumindo que o repositório pode lidar com municipioId vazio
+    
     for (var bairro in bairrosDaAcao) {
       if (bairro.geometria != null && bairro.geometria!.isNotEmpty) {
         try {
@@ -92,12 +93,9 @@ class MapProvider with ChangeNotifier {
           if (points.isNotEmpty) {
             _polygons.add(Polygon(
               points: points,
-              color: Colors.primaries[Random().nextInt(Colors.primaries.length)].withAlpha(102), // 'withOpacity' obsoleto
+              color: Colors.primaries[Random().nextInt(Colors.primaries.length)].withAlpha(102),
               borderColor: Colors.black,
               borderStrokeWidth: 2,
-              // =======================================================
-              // >> CORREÇÃO 2: PARÂMETRO 'isFilled' REMOVIDO <<
-              // =======================================================
             ));
           }
         } catch (e) {
@@ -106,15 +104,31 @@ class MapProvider with ChangeNotifier {
       }
     }
 
-    final focos = await _focoRepository.getUnsyncedFocos();
-    _samplePoints = focos.map((foco) {
-      final point = LatLng(foco.latitude, foco.longitude);
+    // 2. Carregar todos os imóveis pertencentes a esses bairros
+    List<Imovel> imoveisDaAcao = [];
+    for (var bairro in bairrosDaAcao) {
+      if (bairro.id != null) {
+        final imoveisDoBairro = await _imovelRepository.getImoveisDoBairro(bairro.id!);
+        imoveisDaAcao.addAll(imoveisDoBairro);
+      }
+    }
+
+    // 3. Verificar quais imóveis já foram visitados NESTA campanha/ação
+    final visitasDaAcao = await _visitaRepository.getVisitasDaCampanha(_currentAcao!.campanhaId);
+    final visitedImovelIds = visitasDaAcao.map((v) => v.imovelId).toSet();
+
+    // 4. Mapear imóveis para SamplePoints, definindo seu status (visitado ou pendente)
+    _samplePoints = imoveisDaAcao.map((imovel) {
+      final point = LatLng(imovel.latitude, imovel.longitude);
       allPoints.add(point);
+      
+      final bool foiVisitado = visitedImovelIds.contains(imovel.id);
+
       return SamplePoint(
-        id: foco.id ?? 0,
+        id: imovel.id ?? 0,
         position: point,
-        status: _getSampleStatusFromFoco(foco),
-        data: {'dbId': foco.id},
+        status: foiVisitado ? SampleStatus.completed : SampleStatus.untouched,
+        data: {'imovel': imovel}, // Armazena o objeto Imovel completo
       );
     }).toList();
 
@@ -123,21 +137,6 @@ class MapProvider with ChangeNotifier {
     }
 
     _setLoading(false);
-  }
-
-  SampleStatus _getSampleStatusFromFoco(FocoDengue foco) {
-    switch (foco.statusFoco) {
-      case StatusFoco.focoEliminado:
-      case StatusFoco.tratado:
-        return SampleStatus.completed;
-      case StatusFoco.semFoco:
-        return SampleStatus.completed;
-      case StatusFoco.potencial:
-        return SampleStatus.open;
-      case StatusFoco.fechado:
-      case StatusFoco.recusado:
-        return SampleStatus.exported;
-    }
   }
 
   void clearAllMapData() {

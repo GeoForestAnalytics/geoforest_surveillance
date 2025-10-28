@@ -1,10 +1,89 @@
+// lib/pages/gerente/gerente_dashboard_page.dart
+
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:provider/provider.dart';
+import 'package:collection/collection.dart';
+import 'package:intl/intl.dart';
 
-// TODO: Você precisará criar/adaptar estes providers, seguindo a lógica do GeoForest
-// import 'package:geo_dengue_monitor/providers/gerente_provider.dart';
-// import 'package:geo_dengue_monitor/providers/dengue_dashboard_filter_provider.dart';
-// import 'package:geo_dengue_monitor/providers/dengue_dashboard_metrics_provider.dart';
+import 'package:geo_forest_surveillance/providers/gerente_provider.dart';
+import 'package:geo_forest_surveillance/providers/dashboard_filter_provider.dart';
+import 'package:geo_forest_surveillance/models/visita_model.dart';
+import 'package:geo_forest_surveillance/models/campanha_model.dart';
+
+/// Classe auxiliar para calcular e armazenar as métricas do dashboard.
+class _DashboardMetrics {
+  final int totalImoveis;
+  final int totalVisitas;
+  final int focosPositivos;
+  final double progressoGeral;
+  final Map<String, int> rankingAgentes;
+  final Map<StatusFoco, int> distribuicaoStatus;
+
+  _DashboardMetrics({
+    this.totalImoveis = 0,
+    this.totalVisitas = 0,
+    this.focosPositivos = 0,
+    this.progressoGeral = 0.0,
+    this.rankingAgentes = const {},
+    this.distribuicaoStatus = const {},
+  });
+
+  factory _DashboardMetrics.fromProviders(GerenteProvider gProvider, DashboardFilterProvider fProvider) {
+    // Aplica os filtros aos dados brutos
+    final List<Visita> visitasFiltradas = gProvider.visitasSincronizadas.where((visita) {
+      final campanhaOk = fProvider.campanhaSelecionada == null || visita.campanhaId == fProvider.campanhaSelecionada!.id;
+      final agenteOk = fProvider.agenteSelecionado == null || visita.nomeAgente == fProvider.agenteSelecionado;
+      final periodoOk = fProvider.periodoSelecionado == null ||
+          (visita.dataVisita.isAfter(fProvider.periodoSelecionado!.start) &&
+           visita.dataVisita.isBefore(fProvider.periodoSelecionado!.end.add(const Duration(days: 1))));
+      return campanhaOk && agenteOk && periodoOk;
+    }).toList();
+
+    // Métricas de Dengue
+    int focosPositivosCount = 0;
+    final statusCounts = <StatusFoco, int>{};
+
+    final visitasDengue = visitasFiltradas.where((v) {
+      final campanha = gProvider.campanhas.firstWhereOrNull((c) => c.id == v.campanhaId);
+      return campanha?.tipoCampanha == 'dengue';
+    }).toList();
+
+    for (var visita in visitasDengue) {
+      if (visita.dadosFormulario != null) {
+        try {
+          final data = jsonDecode(visita.dadosFormulario!);
+          final statusString = data['statusFoco'];
+          final status = StatusFoco.values.firstWhere((e) => e.name == statusString);
+          statusCounts.update(status, (value) => value + 1, ifAbsent: () => 1);
+          if (status == StatusFoco.focoEliminado || status == StatusFoco.tratado) {
+            focosPositivosCount++;
+          }
+        } catch (_) {}
+      }
+    }
+
+    // Ranking de Agentes
+    final agentCounts = groupBy(visitasFiltradas, (Visita v) => v.nomeAgente)
+        .map((key, value) => MapEntry(key, value.length));
+
+    // Progresso Geral (considera todos os imóveis, mas apenas as visitas filtradas)
+    int totalImoveis = gProvider.imoveisSincronizados.length;
+    double progresso = (totalImoveis == 0) ? 0.0 : visitasFiltradas.length / totalImoveis;
+    if (progresso.isNaN || progresso.isInfinite) progresso = 0.0;
+
+    return _DashboardMetrics(
+      totalImoveis: totalImoveis,
+      totalVisitas: visitasFiltradas.length,
+      focosPositivos: focosPositivosCount,
+      progressoGeral: progresso,
+      rankingAgentes: agentCounts,
+      distribuicaoStatus: statusCounts,
+    );
+  }
+}
+
 
 class GerenteDashboardPage extends StatefulWidget {
   const GerenteDashboardPage({super.key});
@@ -18,79 +97,110 @@ class _GerenteDashboardPageState extends State<GerenteDashboardPage> {
   @override
   void initState() {
     super.initState();
-    // Inicia o carregamento dos dados do gerente assim que a tela é construída
-    // WidgetsBinding.instance.addPostFrameCallback((_) {
-    //   context.read<GerenteProvider>().iniciarMonitoramento();
-    // });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<GerenteProvider>().iniciarMonitoramento();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // TODO: Substitua este conteúdo estático pelo Consumer dos seus providers quando eles forem criados.
-    // Exemplo: return Consumer3<GerenteProvider, DengueFilterProvider, DengueMetricsProvider>(
-    //   builder: (context, gerente, filter, metrics, child) { ... }
-    // );
-    
-    // Conteúdo de Exemplo enquanto os Providers não existem:
     return Scaffold(
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          _buildFiltros(context),
-          const SizedBox(height: 16),
-          _buildSummaryCard(
-            context: context,
-            title: 'Progresso Geral',
-            value: '75%',
-            subtitle: '3.000 de 4.000 imóveis visitados',
-            progress: 0.75,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(height: 24),
-          _buildKpiGrid(context),
-          const SizedBox(height: 24),
-          _buildRankingAgentesCard(context),
-          const SizedBox(height: 24),
-          _buildFocosPorStatusCard(context),
-        ],
+      body: Consumer2<GerenteProvider, DashboardFilterProvider>(
+        builder: (context, gProvider, fProvider, child) {
+          if (gProvider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (gProvider.error != null) {
+            return Center(child: Text("Erro ao carregar dados: ${gProvider.error}"));
+          }
+
+          final metrics = _DashboardMetrics.fromProviders(gProvider, fProvider);
+          
+          return RefreshIndicator(
+            onRefresh: () => gProvider.iniciarMonitoramento(),
+            child: ListView(
+              padding: const EdgeInsets.all(16.0),
+              children: [
+                _buildFiltros(context, gProvider, fProvider),
+                const SizedBox(height: 16),
+                _buildSummaryCard(context: context, metrics: metrics),
+                const SizedBox(height: 24),
+                _buildKpiGrid(context, metrics: metrics),
+                const SizedBox(height: 24),
+                _buildRankingAgentesCard(context, metrics: metrics),
+                const SizedBox(height: 24),
+                _buildFocosPorStatusCard(context, metrics: metrics),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 
-  // Análogo aos Filtros do GeoForest
-  Widget _buildFiltros(BuildContext context) {
+  Widget _buildFiltros(BuildContext context, GerenteProvider gProvider, DashboardFilterProvider fProvider) {
+    final agentes = gProvider.visitasSincronizadas.map((v) => v.nomeAgente).toSet().toList();
+    
     return Card(
       elevation: 4,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // TODO: Substituir por Dropdowns funcionais ligados ao DengueDashboardFilterProvider
-            DropdownButtonFormField(items: const [], onChanged: (v){}, decoration: const InputDecoration(labelText: 'Filtrar por Campanha', border: OutlineInputBorder())),
+            DropdownButtonFormField<Campanha>(
+              value: fProvider.campanhaSelecionada,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Filtrar por Campanha', border: OutlineInputBorder()),
+              items: gProvider.campanhas.map((campanha) {
+                return DropdownMenuItem(value: campanha, child: Text(campanha.nome, overflow: TextOverflow.ellipsis));
+              }).toList(),
+              onChanged: (v) => fProvider.setCampanha(v),
+            ),
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: DropdownButtonFormField(items: const [], onChanged: (v){}, decoration: const InputDecoration(labelText: 'Período', border: OutlineInputBorder()))),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: fProvider.agenteSelecionado,
+                    decoration: const InputDecoration(labelText: 'Agente', border: OutlineInputBorder()),
+                    items: agentes.map((agente) => DropdownMenuItem(value: agente, child: Text(agente))).toList(),
+                    onChanged: (v) => fProvider.setAgente(v),
+                  ),
+                ),
                 const SizedBox(width: 16),
-                Expanded(child: DropdownButtonFormField(items: const [], onChanged: (v){}, decoration: const InputDecoration(labelText: 'Agente', border: OutlineInputBorder()))),
+                Expanded(
+                  child: InkWell(
+                    onTap: () async {
+                      final range = await showDateRangePicker(
+                        context: context,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (range != null) fProvider.setPeriodo(range);
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(labelText: 'Período', border: OutlineInputBorder()),
+                      child: Text(fProvider.periodoSelecionado == null 
+                          ? 'Todos' 
+                          : '${DateFormat('dd/MM/yy').format(fProvider.periodoSelecionado!.start)} - ${DateFormat('dd/MM/yy').format(fProvider.periodoSelecionado!.end)}'),
+                    ),
+                  ),
+                ),
               ],
             ),
+            if (fProvider.campanhaSelecionada != null || fProvider.agenteSelecionado != null || fProvider.periodoSelecionado != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(onPressed: fProvider.limparFiltros, child: const Text('Limpar Filtros')),
+              )
           ],
         ),
       ),
     );
   }
 
-  // Análogo ao SummaryCard
-  Widget _buildSummaryCard({
-    required BuildContext context,
-    required String title,
-    required String value,
-    required String subtitle,
-    required double progress,
-    required Color color,
-  }) {
-    return Card(
+  Widget _buildSummaryCard({ required BuildContext context, required _DashboardMetrics metrics }) {
+     return Card(
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -100,19 +210,18 @@ class _GerenteDashboardPageState extends State<GerenteDashboardPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(title, style: Theme.of(context).textTheme.titleLarge),
-                Text(value, style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: color, fontWeight: FontWeight.bold)),
+                Text('Progresso Geral', style: Theme.of(context).textTheme.titleLarge),
+                Text('${(metrics.progressoGeral * 100).toStringAsFixed(1)}%', 
+                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
               ],
             ),
             const SizedBox(height: 8),
-            Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+            Text('${metrics.totalVisitas} visitas em ${metrics.totalImoveis} imóveis cadastrados', style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 8),
             LinearProgressIndicator(
-              value: progress,
+              value: metrics.progressoGeral > 1.0 ? 1.0 : metrics.progressoGeral, // Garante que não passe de 100%
               minHeight: 6,
               borderRadius: BorderRadius.circular(3),
-              backgroundColor: color.withOpacity(0.2),
-              valueColor: AlwaysStoppedAnimation<Color>(color),
             ),
           ],
         ),
@@ -120,23 +229,14 @@ class _GerenteDashboardPageState extends State<GerenteDashboardPage> {
     );
   }
 
-  // Análogo ao KpiGrid
-  Widget _buildKpiGrid(BuildContext context) {
+  Widget _buildKpiGrid(BuildContext context, { required _DashboardMetrics metrics }) {
     return Column(
       children: [
         Row(
           children: [
-            Expanded(child: _buildKpiCard('Focos Positivos', '152', Icons.bug_report, Colors.red)),
+            Expanded(child: _buildKpiCard('Focos Positivos', metrics.focosPositivos.toString(), Icons.bug_report, Colors.red)),
             const SizedBox(width: 16),
-            Expanded(child: _buildKpiCard('Vistorias Totais', '3.000', Icons.home_work, Colors.blue)),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(child: _buildKpiCard('Índice de Infestação', '5.1%', Icons.percent, Colors.orange)),
-            const SizedBox(width: 16),
-            Expanded(child: _buildKpiCard('Amostras Coletadas', '89', Icons.science, Colors.purple)),
+            Expanded(child: _buildKpiCard('Vistorias Totais', metrics.totalVisitas.toString(), Icons.home_work, Colors.blue)),
           ],
         ),
       ],
@@ -151,11 +251,7 @@ class _GerenteDashboardPageState extends State<GerenteDashboardPage> {
         padding: const EdgeInsets.all(12.0),
         child: Column(
           children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: color.withOpacity(0.15),
-              child: Icon(icon, color: color, size: 24),
-            ),
+            CircleAvatar(radius: 20, backgroundColor: color.withOpacity(0.15), child: Icon(icon, color: color, size: 24)),
             const SizedBox(height: 12),
             Text(title, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[700], fontWeight: FontWeight.w500)),
             const SizedBox(height: 4),
@@ -166,8 +262,17 @@ class _GerenteDashboardPageState extends State<GerenteDashboardPage> {
     );
   }
   
-  // Análogo ao Ranking de Equipes
-  Widget _buildRankingAgentesCard(BuildContext context) {
+  Widget _buildRankingAgentesCard(BuildContext context, { required _DashboardMetrics metrics }) {
+    final rankingOrdenado = metrics.rankingAgentes.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    
+    final top3 = rankingOrdenado.take(3).toList();
+    final icones = [
+      const Icon(Icons.military_tech, color: Color(0xFFFFD700), size: 40),
+      const Icon(Icons.military_tech, color: Color(0xFFC0C0C0), size: 40),
+      const Icon(Icons.military_tech, color: Color(0xFFCD7F32), size: 40),
+    ];
+
     return Card(
       elevation: 2,
       child: Padding(
@@ -177,63 +282,84 @@ class _GerenteDashboardPageState extends State<GerenteDashboardPage> {
           children: [
             Text("Top Agentes (Vistorias)", style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.military_tech, color: Color(0xFFFFD700), size: 40),
-              title: const Text('João da Silva', style: TextStyle(fontWeight: FontWeight.bold)),
-              trailing: const Text('250 Vistorias', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.military_tech, color: Color(0xFFC0C0C0), size: 40),
-              title: const Text('Maria Oliveira', style: TextStyle(fontWeight: FontWeight.bold)),
-              trailing: const Text('231 Vistorias', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.military_tech, color: Color(0xFFCD7F32), size: 40),
-              title: const Text('Pedro Souza', style: TextStyle(fontWeight: FontWeight.bold)),
-              trailing: const Text('215 Vistorias', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-            ),
+            if (top3.isEmpty)
+              const Center(child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 24.0),
+                child: Text('Nenhuma visita encontrada com os filtros atuais.'),
+              ))
+            else
+              ...List.generate(top3.length, (index) {
+                final entry = top3[index];
+                return ListTile(
+                  leading: icones[index],
+                  title: Text(entry.key, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  trailing: Text('${entry.value} Vistorias', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                );
+              }),
           ],
         ),
       ),
     );
   }
 
-  // Análogo ao Gráfico de Coletas por Atividade
-  Widget _buildFocosPorStatusCard(BuildContext context) {
+  Widget _buildFocosPorStatusCard(BuildContext context, { required _DashboardMetrics metrics }) {
+    final Map<StatusFoco, Color> cores = {
+      StatusFoco.semFoco: Colors.green,
+      StatusFoco.focoEliminado: Colors.red,
+      StatusFoco.tratado: Colors.red.shade700,
+      StatusFoco.potencial: Colors.orange,
+      StatusFoco.fechado: Colors.grey,
+      StatusFoco.recusado: Colors.grey.shade700,
+    };
+    final Map<StatusFoco, String> legendas = {
+      StatusFoco.semFoco: 'Sem Foco',
+      StatusFoco.focoEliminado: 'Foco Eliminado',
+      StatusFoco.tratado: 'Foco Tratado',
+      StatusFoco.potencial: 'Potencial',
+      StatusFoco.fechado: 'Fechado',
+      StatusFoco.recusado: 'Recusado',
+    };
+
+    final total = metrics.distribuicaoStatus.values.fold(0, (prev, e) => prev + e);
+
     return Card(
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            Text("Distribuição de Vistorias por Status", style: Theme.of(context).textTheme.titleLarge),
+            Text("Distribuição de Vistorias (Dengue)", style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 24),
-            SizedBox(
-              height: 200,
-              child: PieChart(
-                PieChartData(
-                  sections: [
-                    PieChartSectionData(value: 60, title: '60%', color: Colors.green, titleStyle: const TextStyle(color: Colors.white)),
-                    PieChartSectionData(value: 15, title: '15%', color: Colors.red, titleStyle: const TextStyle(color: Colors.white)),
-                    PieChartSectionData(value: 10, title: '10%', color: Colors.orange, titleStyle: const TextStyle(color: Colors.white)),
-                    PieChartSectionData(value: 15, title: '15%', color: Colors.grey, titleStyle: const TextStyle(color: Colors.white)),
-                  ],
-                  centerSpaceRadius: 40,
-                  sectionsSpace: 2,
+            if (total == 0)
+              const SizedBox(height: 200, child: Center(child: Text('Nenhuma visita de dengue encontrada com os filtros atuais.')))
+            else
+              SizedBox(
+                height: 200,
+                child: PieChart(
+                  PieChartData(
+                    sections: metrics.distribuicaoStatus.entries.map((entry) {
+                      final porcentagem = (entry.value / total) * 100;
+                      return PieChartSectionData(
+                        value: entry.value.toDouble(),
+                        title: '${porcentagem.toStringAsFixed(0)}%',
+                        color: cores[entry.key] ?? Colors.blueGrey,
+                        titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        radius: 80,
+                      );
+                    }).toList(),
+                    centerSpaceRadius: 40,
+                    sectionsSpace: 2,
+                  ),
                 ),
               ),
-            ),
             const SizedBox(height: 24),
-            const Wrap(
+            Wrap(
               spacing: 16,
               runSpacing: 8,
               alignment: WrapAlignment.center,
-              children: [
-                _LegendItem(color: Colors.green, text: 'Sem Foco'),
-                _LegendItem(color: Colors.red, text: 'Foco Eliminado'),
-                _LegendItem(color: Colors.orange, text: 'Potencial'),
-                _LegendItem(color: Colors.grey, text: 'Fechado/Recusado'),
-              ],
+              children: metrics.distribuicaoStatus.entries
+                  .map((entry) => _LegendItem(color: cores[entry.key]!, text: legendas[entry.key]!))
+                  .toList(),
             )
           ],
         ),

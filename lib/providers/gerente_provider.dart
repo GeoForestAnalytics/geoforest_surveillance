@@ -1,11 +1,12 @@
+// lib/providers/gerente_provider.dart
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:collection/collection.dart';
 
-// Imports atualizados para os modelos e repositórios de Dengue
-import 'package:geo_forest_surveillance/models/foco_dengue_model.dart';
+// Imports da nova arquitetura
+import 'package:geo_forest_surveillance/models/imovel_model.dart';
+import 'package:geo_forest_surveillance/models/visita_model.dart';
 import 'package:geo_forest_surveillance/models/diario_de_campo_model.dart';
 import 'package:geo_forest_surveillance/models/campanha_model.dart';
 import 'package:geo_forest_surveillance/models/acao_model.dart';
@@ -13,8 +14,17 @@ import 'package:geo_forest_surveillance/models/bairro_model.dart';
 import 'package:geo_forest_surveillance/data/repositories/campanha_repository.dart';
 import 'package:geo_forest_surveillance/data/repositories/acao_repository.dart';
 import 'package:geo_forest_surveillance/data/repositories/bairro_repository.dart';
-import 'package:geo_forest_surveillance/services/gerente_service.dart'; // Será adaptado
+import 'package:geo_forest_surveillance/services/gerente_service.dart';
 import 'package:geo_forest_surveillance/services/licensing_service.dart';
+
+/// Classe ViewModel que combina uma Visita com os dados do seu respectivo Imóvel.
+/// Isso facilita a exibição de dados completos na UI (mapas, dashboards, etc.).
+class VisitaEnriquecida {
+  final Visita visita;
+  final Imovel imovel;
+
+  VisitaEnriquecida({required this.visita, required this.imovel});
+}
 
 class GerenteProvider with ChangeNotifier {
   final GerenteService _gerenteService = GerenteService();
@@ -24,17 +34,20 @@ class GerenteProvider with ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final LicensingService _licensingService = LicensingService();
 
-  StreamSubscription? _focosSubscription;
+  // Subscriptions para os streams do Firestore
+  StreamSubscription? _imoveisSubscription;
+  StreamSubscription? _visitasSubscription;
   StreamSubscription? _diariosSubscription;
 
   // Listas de dados brutos e mapas auxiliares
-  List<FocoDengue> _focosSincronizados = [];
+  List<Imovel> _imoveisSincronizados = [];
+  List<Visita> _visitasSincronizadas = [];
   List<DiarioDeCampo> _diariosSincronizados = [];
+  
   List<Campanha> _campanhas = [];
   List<Acao> _acoes = [];
   List<Bairro> _bairros = [];
-  Map<int, String> _bairroIdToNomeMap = {};
-  Map<int, int> _bairroToCampanhaMap = {};
+  Map<int, Imovel> _imovelIdToImovelMap = {};
 
   bool _isLoading = true;
   String? _error;
@@ -45,36 +58,32 @@ class GerenteProvider with ChangeNotifier {
   List<Campanha> get campanhas => _campanhas;
   List<Acao> get acoes => _acoes;
   List<Bairro> get bairros => _bairros;
-  List<FocoDengue> get focosSincronizados => _focosSincronizados;
+  List<Imovel> get imoveisSincronizados => _imoveisSincronizados;
+  List<Visita> get visitasSincronizadas => _visitasSincronizadas;
   List<DiarioDeCampo> get diariosSincronizados => _diariosSincronizados;
 
-  // <<< GETTER ESSENCIAL PARA O MAPA E DASHBOARD >>>
-  // Este getter retorna a lista de focos já com o nome do bairro preenchido
-  List<FocoDengue> get focosFiltrados {
-      return _focosSincronizados.map((foco) {
-          return foco.copyWith(
-              bairroNome: _bairroIdToNomeMap[foco.bairroId] ?? 'Desconhecido',
-              // A campanhaId já vem no foco, então não precisamos buscar
-          );
-      }).toList();
+  /// Getter principal para a UI: retorna a lista de visitas já com os dados do imóvel associado.
+  List<VisitaEnriquecida> get visitasEnriquecidas {
+    return _visitasSincronizadas.map((visita) {
+      final imovelAssociado = _imovelIdToImovelMap[visita.imovelId];
+      // Se o imóvel não for encontrado (caso raro de inconsistência), criamos um placeholder.
+      final imovel = imovelAssociado ?? Imovel(logradouro: 'Imóvel Desconhecido', latitude: 0, longitude: 0, dataCadastro: DateTime.now());
+      return VisitaEnriquecida(visita: visita, imovel: imovel);
+    }).toList();
   }
-
 
   GerenteProvider() {
-    // Pode ser necessário inicializar formatação de data se for usar
-    // initializeDateFormatting('pt_BR', null);
+    // A inicialização agora é chamada pela UI quando necessário.
   }
 
-  /// Busca no banco local por campanhas que foram delegadas.
   Future<Set<String>> _getDelegatedLicenseIds() async {
-    // TODO: Adicionar lógica de delegação se for mantida no app de dengue.
-    // Por enquanto, retorna um conjunto vazio.
     return {};
   }
 
-  /// Inicia o monitoramento dos dados do Firestore.
   Future<void> iniciarMonitoramento() async {
-    _focosSubscription?.cancel();
+    // Cancela subscriptions antigas para evitar leaks de memória
+    _imoveisSubscription?.cancel();
+    _visitasSubscription?.cancel();
     _diariosSubscription?.cancel();
 
     _isLoading = true;
@@ -92,24 +101,39 @@ class GerenteProvider with ChangeNotifier {
       final delegatedLicenseIds = await _getDelegatedLicenseIds();
       final allLicenseIdsToMonitor = {ownLicenseId, ...delegatedLicenseIds}.toList();
       
-      // Carrega a hierarquia local para referência
       await _buildAuxiliaryMaps(ownLicenseId);
 
-      // Ouve os streams de dados do Firestore
-      _focosSubscription = _gerenteService.getFocosStream(licenseIds: allLicenseIdsToMonitor).listen(
-        (listaDeFocos) {
-          _focosSincronizados = listaDeFocos;
-          if (_isLoading) _isLoading = false;
+      // Ouve o stream de Imóveis
+      _imoveisSubscription = _gerenteService.getImoveisStream(licenseIds: allLicenseIdsToMonitor).listen(
+        (listaDeImoveis) {
+          _imoveisSincronizados = listaDeImoveis;
+          // Reconstrói o mapa de lookup para acesso rápido
+          _imovelIdToImovelMap = { for (var imovel in _imoveisSincronizados) if (imovel.id != null) imovel.id! : imovel };
+          notifyListeners();
+        },
+        onError: (e) {
+          _error = "Erro ao buscar dados de imóveis: $e";
+          _isLoading = false;
+          notifyListeners();
+        },
+      );
+      
+      // Ouve o stream de Visitas
+      _visitasSubscription = _gerenteService.getVisitasStream(licenseIds: allLicenseIdsToMonitor).listen(
+        (listaDeVisitas) {
+          _visitasSincronizadas = listaDeVisitas;
+          if (_isLoading) _isLoading = false; // A UI está pronta quando as visitas chegam
           _error = null;
           notifyListeners();
         },
         onError: (e) {
-          _error = "Erro ao buscar dados de focos: $e";
+          _error = "Erro ao buscar dados de visitas: $e";
           _isLoading = false;
           notifyListeners();
         },
       );
 
+      // Ouve o stream de Diários (mantido)
       _diariosSubscription = _gerenteService.getDadosDiarioStream(licenseIds: allLicenseIdsToMonitor).listen(
         (listaDeDiarios) {
           _diariosSincronizados = listaDeDiarios;
@@ -125,29 +149,18 @@ class GerenteProvider with ChangeNotifier {
     }
   }
 
-  /// Cria mapas auxiliares para enriquecer os dados vindos do Firestore.
+  /// Carrega dados do banco de dados local para serem usados como referência.
   Future<void> _buildAuxiliaryMaps(String licenseId) async {
-    _campanhas = await _campanhaRepository.getTodasCampanhas(licenseId);
-    
-    // TODO: Criar método _acaoRepository.getTodasAcoes()
-    // _acoes = await _acaoRepository.getTodasAcoes();
-    
-    // TODO: Criar método _bairroRepository.getTodosBairros()
-    // _bairros = await _bairroRepository.getTodosBairros();
-    
-    _bairroIdToNomeMap = { for (var bairro in _bairros) if (bairro.id != null) bairro.id!: bairro.nome };
-
-    // Mapeia bairro -> acao -> campanha
-    final Map<int, int> bairroToAcaoMap = { for (var b in _bairros) if(b.id != null) b.id! : b.acaoId };
-    final Map<int, int> acaoToCampanhaMap = { for (var a in _acoes) if(a.id != null) a.id! : a.campanhaId };
-    _bairroToCampanhaMap = bairroToAcaoMap.map((bairroId, acaoId) {
-        return MapEntry(bairroId, acaoToCampanhaMap[acaoId] ?? 0);
-    });
+    // Corrigindo os TODOs e carregando os dados locais
+    _campanhas = await _campanhaRepository.getTodasAsCampanhasParaGerente();
+    _acoes = await _acaoRepository.getTodasAcoes();
+    _bairros = await _bairroRepository.getTodosBairros();
   }
 
   @override
   void dispose() {
-    _focosSubscription?.cancel();
+    _imoveisSubscription?.cancel();
+    _visitasSubscription?.cancel();
     _diariosSubscription?.cancel();
     super.dispose();
   }

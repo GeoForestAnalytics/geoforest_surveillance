@@ -3,6 +3,11 @@
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
 
+// =======================================================
+// >> ENUM MOVIDO PARA UM LOCAL CENTRALIZADO <<
+// =======================================================
+enum StatusFoco { focoEliminado, potencial, tratado, recusado, fechado, semFoco }
+
 class Visita {
   final int? id;
   final String uuid;

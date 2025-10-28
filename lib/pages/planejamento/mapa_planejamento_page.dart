@@ -4,14 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:collection/collection.dart';
 
-// Imports Adaptados
-import 'package:geo_forest_surveillance/models/foco_dengue_model.dart';
+// Imports da nova arquitetura
+import 'package:geo_forest_surveillance/models/imovel_model.dart';
+import 'package:geo_forest_surveillance/models/campanha_model.dart';
+import 'package:geo_forest_surveillance/models/acao_model.dart';
 import 'package:geo_forest_surveillance/models/sample_point.dart';
 import 'package:geo_forest_surveillance/providers/map_provider.dart';
-import 'package:geo_forest_surveillance/data/repositories/foco_repository.dart';
-import 'package:geo_forest_surveillance/pages/focos/form_foco_page.dart';
-import 'package:geo_forest_surveillance/models/bairro_model.dart';
+import 'package:geo_forest_surveillance/pages/visitas/form_visita_page.dart';
+import 'package:geo_forest_surveillance/data/repositories/campanha_repository.dart';
+import 'package:geo_forest_surveillance/data/repositories/acao_repository.dart';
 
 class MapaPlanejamentoPage extends StatefulWidget {
   const MapaPlanejamentoPage({super.key});
@@ -22,7 +25,9 @@ class MapaPlanejamentoPage extends StatefulWidget {
 
 class _MapaPlanejamentoPageState extends State<MapaPlanejamentoPage> {
   final _mapController = MapController();
-  final FocoRepository _focoRepository = FocoRepository();
+  // Repositórios necessários para buscar detalhes da campanha/ação
+  final _campanhaRepository = CampanhaRepository();
+  final _acaoRepository = AcaoRepository();
 
   @override
   void initState() {
@@ -30,10 +35,6 @@ class _MapaPlanejamentoPageState extends State<MapaPlanejamentoPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final mapProvider = context.read<MapProvider>();
       final bounds = mapProvider.bounds;
-      // =======================================================
-      // >> CORREÇÃO PRINCIPAL APLICADA AQUI <<
-      // Trocado 'bounds.isValid' por uma verificação dos cantos do bounds
-      // =======================================================
       if (bounds != null && bounds.northEast != null && bounds.southWest != null) {
         _mapController.fitCamera(
           CameraFit.bounds(
@@ -53,41 +54,33 @@ class _MapaPlanejamentoPageState extends State<MapaPlanejamentoPage> {
     super.dispose();
   }
 
-  StatusFoco _getFocoStatusFromSample(SamplePoint sample) {
-    return StatusFoco.values.firstWhere(
-      (e) => e.name == sample.status.name,
-      orElse: () => StatusFoco.semFoco,
-    );
-  }
-
-  Color _getMarkerColor(StatusFoco status) {
+  // A nova lógica de cor é baseada no status do SamplePoint (Pendente vs Visitado)
+  Color _getMarkerColor(SampleStatus status) {
     switch (status) {
-      case StatusFoco.focoEliminado:
-      case StatusFoco.tratado:
-        return Colors.red.shade700;
-      case StatusFoco.potencial:
-        return Colors.orange.shade700;
-      case StatusFoco.semFoco:
-        return Colors.green;
-      case StatusFoco.fechado:
-      case StatusFoco.recusado:
-        return Colors.grey.shade600;
+      case SampleStatus.completed:
+        return Colors.green.shade700;
+      case SampleStatus.untouched:
+        return Colors.blueGrey;
+      default:
+        return Colors.orange;
     }
   }
 
   Future<void> _handleLocationButtonPressed() async {
-    // A variável 'provider' não era usada, então a chamada foi simplificada.
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Funcionalidade de GPS a ser implementada.')));
+    // TODO: Implementar a lógica de localização, se necessário, usando o MapProvider
+    context.read<MapProvider>().toggleFollowingUser();
   }
 
   void _showMarkerOptions(BuildContext context, SamplePoint samplePoint) {
     final mapProvider = context.read<MapProvider>();
+    final imovel = samplePoint.data['imovel'] as Imovel?;
+
     showModalBottomSheet(
       context: context,
       builder: (ctx) => Wrap(
         children: <Widget>[
           ListTile(
-            title: Text('Vistoria ID: ${samplePoint.id}', style: const TextStyle(fontWeight: FontWeight.bold)),
+            title: Text(imovel?.logradouro ?? 'Imóvel ID: ${samplePoint.id}', style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text('Lat: ${samplePoint.position.latitude.toStringAsFixed(5)}, Lon: ${samplePoint.position.longitude.toStringAsFixed(5)}'),
           ),
           const Divider(height: 1),
@@ -151,7 +144,6 @@ class _MapaPlanejamentoPageState extends State<MapaPlanejamentoPage> {
       title: Text('Mapa: $nomeAcao'),
       actions: [
         IconButton(icon: const Icon(Icons.layers_outlined), onPressed: () => mapProvider.switchMapLayer(), tooltip: 'Mudar Camada'),
-        IconButton(icon: const Icon(Icons.file_upload_outlined), onPressed: () {}, tooltip: 'Importar Plano de Vistorias'),
       ],
     );
   }
@@ -173,47 +165,49 @@ class _MapaPlanejamentoPageState extends State<MapaPlanejamentoPage> {
               PolygonLayer(polygons: mapProvider.polygons),
               MarkerLayer(
                 markers: mapProvider.samplePoints.map((samplePoint) {
-                  final status = _getFocoStatusFromSample(samplePoint);
-                  final color = _getMarkerColor(status);
+                  final color = _getMarkerColor(samplePoint.status);
+                  final imovel = samplePoint.data['imovel'] as Imovel?;
+
                   return Marker(
                     width: 40.0,
                     height: 40.0,
                     point: samplePoint.position,
                     child: GestureDetector(
                       onTap: () async {
-                        final dbId = samplePoint.data['dbId'] as int?;
-                        if (dbId == null) return;
+                        if (imovel == null) return;
                         
-                        final foco = await _focoRepository.getFocoById(dbId);
-                        if (!mounted || foco == null) return;
-
-                        final bairroDummy = Bairro(id: foco.bairroId, acaoId: 0, municipioId: '', nome: 'Carregando...');
+                        // Busca os detalhes da campanha e da ação para passar para o formulário de visita
+                        final acao = mapProvider.currentAcao;
+                        if (acao == null) return;
+                        final campanha = await _campanhaRepository.getCampanhaById(acao.campanhaId);
+                        if (!mounted || campanha == null) return;
 
                         final bool? foiSalvo = await Navigator.push<bool>(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => FormFocoPage(
-                              bairro: bairroDummy,
-                              campanhaId: foco.campanhaId,
-                              focoParaEditar: foco,
+                            builder: (context) => FormVisitaPage(
+                              imovel: imovel,
+                              campanha: campanha,
+                              acao: acao,
                             ),
                           ),
                         );
+                        // Se a visita foi salva, recarrega os dados do mapa para atualizar o status do ponto
                         if (foiSalvo == true && mounted) {
                           context.read<MapProvider>().loadDataForAcao();
                         }
                       },
                       onLongPress: () => _showMarkerOptions(context, samplePoint),
                       child: Tooltip(
-                        message: "Vistoria ${samplePoint.id}",
+                        message: imovel?.logradouro ?? "Imóvel ID ${imovel?.id}",
                         child: Container(
                           decoration: BoxDecoration(
-                              color: color.withAlpha(230), // 'withOpacity' é obsoleto
+                              color: color.withAlpha(230),
                               shape: BoxShape.circle,
                               border: Border.all(color: Colors.white, width: 2),
                               boxShadow: [
                                 BoxShadow(
-                                    color: Colors.black.withAlpha(128), // 'withOpacity' é obsoleto
+                                    color: Colors.black.withAlpha(128),
                                     blurRadius: 4,
                                     offset: const Offset(2, 2))
                               ]),
@@ -237,7 +231,7 @@ class _MapaPlanejamentoPageState extends State<MapaPlanejamentoPage> {
           ),
           if (mapProvider.isLoading)
             Container(
-              color: Colors.black.withAlpha(128), // 'withOpacity' é obsoleto
+              color: Colors.black.withAlpha(128),
               child: const Center(
                   child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                 CircularProgressIndicator(),
@@ -292,7 +286,7 @@ class _LocationMarkerState extends State<LocationMarker> with SingleTickerProvid
             child: Container(
               width: 50.0,
               height: 50.0,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.blue.withAlpha(102)), // 'withOpacity' é obsoleto
+              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.blue.withAlpha(102)),
             ),
           ),
         ),
@@ -305,7 +299,7 @@ class _LocationMarkerState extends State<LocationMarker> with SingleTickerProvid
             border: Border.all(color: Colors.white, width: 2.5),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withAlpha(77), // 'withOpacity' é obsoleto
+                  color: Colors.black.withAlpha(77),
                   blurRadius: 5,
                   offset: const Offset(0, 3))
             ],
