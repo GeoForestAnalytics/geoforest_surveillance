@@ -1,4 +1,4 @@
-// lib/pages/acoes/detalhes_acao_page.dart
+// lib/pages/acoes/detalhes_acao_page.dart (VERSÃO ATUALIZADA)
 
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -11,6 +11,11 @@ import 'package:geo_forest_surveillance/models/municipio_model.dart';
 import 'package:geo_forest_surveillance/data/repositories/acao_repository.dart';
 import 'package:geo_forest_surveillance/data/repositories/municipio_repository.dart';
 import 'package:geo_forest_surveillance/pages/municipios/form_municipio_page.dart';
+// =======================================================
+// >> NOVOS IMPORTS ADICIONADOS AQUI <<
+// =======================================================
+import 'package:geo_forest_surveillance/pages/acoes/importar_setores_page.dart';
+import 'package:geo_forest_surveillance/pages/importacao/importar_postos_page.dart';
 
 class DetalhesAcaoPage extends StatefulWidget {
   final int campanhaId;
@@ -46,6 +51,7 @@ class _DetalhesAcaoPageState extends State<DetalhesAcaoPage> {
     });
   }
 
+  // Permanece para adicionar manualmente
   void _navegarParaNovoMunicipio() async {
     final bool? foiCriado = await Navigator.push<bool>(
       context,
@@ -55,7 +61,28 @@ class _DetalhesAcaoPageState extends State<DetalhesAcaoPage> {
       _carregarDados();
     }
   }
-  
+
+  // =======================================================
+  // >> NOVAS FUNÇÕES DE NAVEGAÇÃO ADICIONADAS AQUI <<
+  // =======================================================
+  void _navegarParaImportarSetores() async {
+    final bool? importou = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (context) => ImportarSetoresPage(acaoId: widget.acaoId)),
+    );
+    if (importou == true) {
+      _carregarDados();
+    }
+  }
+
+  void _navegarParaImportarPostos() async {
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (context) => const ImportarPostosPage()),
+    );
+    // Não precisa recarregar os dados aqui, pois a lista de municípios não muda.
+  }
+
   void _navegarParaDetalhesMunicipio(Municipio municipio) {
     context.push('/campanhas/${widget.campanhaId}/acoes/${widget.acaoId}/municipios/${municipio.id}');
   }
@@ -77,6 +104,56 @@ class _DetalhesAcaoPageState extends State<DetalhesAcaoPage> {
         if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Município removido.')));
         _carregarDados();
     }
+  }
+
+  // =======================================================
+  // >> NOVO WIDGET PARA O ESTADO VAZIO <<
+  // =======================================================
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Icon(Icons.map_outlined, size: 80, color: Colors.grey),
+            const SizedBox(height: 16),
+            const Text(
+              'Nenhum município adicionado a esta ação.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Escolha uma opção para começar:',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: _navegarParaImportarSetores,
+              icon: const Icon(Icons.upload_file_outlined),
+              label: const Text('Importar Setores (GeoJSON)'),
+              style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _navegarParaNovoMunicipio,
+              icon: const Icon(Icons.add_location_alt_outlined),
+              label: const Text('Adicionar Município Manualmente'),
+            ),
+            const Divider(height: 48),
+            TextButton.icon(
+              onPressed: _navegarParaImportarPostos,
+              icon: const Icon(Icons.pin_drop_outlined, size: 18),
+              label: const Text('Atualizar Coordenadas dos Postos'),
+              style: TextButton.styleFrom(foregroundColor: Colors.grey.shade400),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -126,9 +203,14 @@ class _DetalhesAcaoPageState extends State<DetalhesAcaoPage> {
                       return const Center(child: CircularProgressIndicator());
                     }
                     final municipios = municipiosSnapshot.data ?? [];
+                    
+                    // =======================================================
+                    // >> LÓGICA DE EXIBIÇÃO ATUALIZADA <<
+                    // =======================================================
                     if (municipios.isEmpty) {
-                      return const Center(child: Text('Nenhum município adicionado a esta ação.'));
+                      return _buildEmptyState();
                     }
+
                     return ListView.builder(
                       padding: const EdgeInsets.only(bottom: 80),
                       itemCount: municipios.length,
@@ -158,11 +240,20 @@ class _DetalhesAcaoPageState extends State<DetalhesAcaoPage> {
               ),
             ],
           ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: _navegarParaNovoMunicipio,
-            tooltip: 'Adicionar Município',
-            icon: const Icon(Icons.add_location_alt_outlined),
-            label: const Text('Novo Município'),
+          // Esconde o FAB quando a lista estiver vazia para não confundir com os botões principais
+          floatingActionButton: FutureBuilder<List<Municipio>>(
+            future: _municipiosFuture,
+            builder: (context, snapshot) {
+              if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                return FloatingActionButton.extended(
+                  onPressed: _navegarParaNovoMunicipio,
+                  tooltip: 'Adicionar Município',
+                  icon: const Icon(Icons.add_location_alt_outlined),
+                  label: const Text('Novo Município'),
+                );
+              }
+              return const SizedBox.shrink(); // Retorna um widget vazio
+            },
           ),
         );
       },

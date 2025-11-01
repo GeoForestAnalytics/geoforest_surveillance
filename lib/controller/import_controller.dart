@@ -1,4 +1,4 @@
-// Arquivo: lib/controller/import_controller.dart (VERSÃO CORRIGIDA E FINAL)
+// Arquivo: lib/controller/import_controller.dart (VERSÃO COMPLETA E ATUALIZADA)
 
 import 'dart:convert';
 import 'dart:io';
@@ -175,10 +175,82 @@ class ImportController with ChangeNotifier {
       return false;
     }
   }
+  
+  // =======================================================
+  // >> NOVO MÉTODO PARA IMPORTAR SETORES EM AÇÃO EXISTENTE <<
+  // =======================================================
+  Future<bool> processarImportacaoDeSetores({
+    required File geojsonFile,
+    required int acaoId, // <-- Recebe a Ação existente
+    required String municipioId,
+    required String municipioNome,
+    required String municipioUf,
+  }) async {
+    _setLoading(true);
 
-  // =======================================================
-  // >> NOVO MÉTODO ADICIONADO AQUI <<
-  // =======================================================
+    try {
+      final mapa = await validarGeoJsonPoligonos(geojsonFile);
+      final licenseId = context.read<LicenseProvider>().licenseData!.id;
+      final db = await DatabaseHelper.instance.database;
+
+      await db.transaction((txn) async {
+        // Não cria campanha nem ação, usa a existente
+        final novoMunicipio = Municipio(
+            id: municipioId,
+            acaoId: acaoId,
+            nome: municipioNome,
+            uf: municipioUf);
+        await txn.insert('municipios', novoMunicipio.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.ignore);
+
+        final Map<String, int> postosJaProcessados = {};
+
+        for (var feature in mapa['features']) {
+          final properties = feature['properties'];
+          final geometria = feature['geometry'];
+
+          final nomePosto = properties['posto_saud'] as String;
+          final nomeSetor = properties['setor_nome'] as String;
+          int postoId;
+
+          if (postosJaProcessados.containsKey(nomePosto)) {
+            postoId = postosJaProcessados[nomePosto]!;
+          } else {
+            final List<Map<String, dynamic>> postoExistente = await txn.query(
+                'postos',
+                columns: ['id'],
+                where: 'nome = ? AND licenseId = ?',
+                whereArgs: [nomePosto, licenseId],
+                limit: 1);
+
+            if (postoExistente.isNotEmpty) {
+              postoId = postoExistente.first['id'] as int;
+            } else {
+              postoId = await txn.insert(
+                  'postos', {'nome': nomePosto, 'licenseId': licenseId});
+            }
+            postosJaProcessados[nomePosto] = postoId;
+          }
+
+          final novoBairro = Bairro(
+            acaoId: acaoId,
+            municipioId: municipioId,
+            postoId: postoId,
+            nome: nomeSetor,
+            geometria: jsonEncode(geometria),
+          );
+          await txn.insert('bairros', novoBairro.toMap());
+        }
+      });
+
+      _setLoading(false);
+      return true;
+    } catch (e) {
+      _setError("Falha na importação dos setores: ${e.toString()}");
+      return false;
+    }
+  }
+
   Future<bool> processarImportacaoDePontos({
     required File geojsonFile,
   }) async {

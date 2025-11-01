@@ -1,4 +1,4 @@
-// Arquivo: lib/data/datasources/local/database_helper.dart (VERSÃO CORRIGIDA E ATUALIZADA)
+// Arquivo: lib/data/datasources/local/database_helper.dart (VERSÃO CORRIGIDA E FINAL)
 
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
@@ -19,9 +19,9 @@ class DatabaseHelper {
     return await openDatabase(
       join(await getDatabasesPath(), 'geo_dengue_monitor.db'),
       // =======================================================
-      // >> MUDANÇA 9: VERSÃO DO BANCO ATUALIZADA PARA 4 <<
+      // >> MUDANÇA 1: VERSÃO DO BANCO ATUALIZADA PARA 5 <<
       // =======================================================
-      version: 4,
+      version: 5, 
       onConfigure: _onConfigure,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
@@ -31,11 +31,8 @@ class DatabaseHelper {
   Future<void> _onConfigure(Database db) async => await db.execute('PRAGMA foreign_keys = ON');
 
   Future<void> _onCreate(Database db, int version) async {
-    // Este método agora cria o banco de dados já na versão 4
+    // Este método agora cria o banco de dados já na versão 5
     
-    // =======================================================
-    // >> MUDANÇA 10: TABELA 'campanhas' COM CAMPO 'tipo' <<
-    // =======================================================
     await db.execute('''
       CREATE TABLE campanhas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,7 +41,12 @@ class DatabaseHelper {
         orgaoResponsavel TEXT NOT NULL,
         tipoCampanha TEXT NOT NULL DEFAULT 'dengue',
         dataCriacao TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'ativa'
+        status TEXT NOT NULL DEFAULT 'ativa',
+        -- =======================================================
+        -- >> MUDANÇA 2: COLUNAS ADICIONADAS AQUI (CORREÇÃO DO ERRO) <<
+        -- =======================================================
+        responsavelTecnico TEXT,
+        corSetor TEXT
       )
     ''');
     
@@ -94,9 +96,6 @@ class DatabaseHelper {
       )
     ''');
 
-    // =======================================================
-    // >> MUDANÇA 11: NOVA TABELA 'imoveis' PARA O CADASTRO FIXO <<
-    // =======================================================
     await db.execute('''
       CREATE TABLE imoveis (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,12 +108,8 @@ class DatabaseHelper {
         latitude REAL NOT NULL,
         longitude REAL NOT NULL,
         tipoImovel TEXT,
-        
-        -- Campos socioeconômicos
         quantidadeMoradores INTEGER,
         rendaFamiliar REAL,
-        
-        -- Outros dados fixos
         dataCadastro TEXT NOT NULL,
         isSynced INTEGER DEFAULT 0 NOT NULL,
         FOREIGN KEY (bairroId) REFERENCES bairros (id) ON DELETE SET NULL
@@ -122,9 +117,6 @@ class DatabaseHelper {
     ''');
     await db.execute('CREATE INDEX idx_imoveis_bairroId ON imoveis(bairroId)');
 
-    // =======================================================
-    // >> MUDANÇA 12: NOVA TABELA 'visitas' PARA OS EVENTOS <<
-    // =======================================================
     await db.execute('''
       CREATE TABLE visitas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,10 +127,7 @@ class DatabaseHelper {
         dataVisita TEXT NOT NULL,
         nomeAgente TEXT NOT NULL,
         nomeResponsavelAtendimento TEXT,
-        
-        -- Campo flexível para armazenar dados do formulário específico da campanha
         dadosFormulario TEXT,
-        
         photoPaths TEXT,
         observacao TEXT,
         isSynced INTEGER DEFAULT 0 NOT NULL,
@@ -150,8 +139,6 @@ class DatabaseHelper {
     await db.execute('CREATE INDEX idx_visitas_imovelId ON visitas(imovelId)');
     await db.execute('CREATE INDEX idx_visitas_campanhaId ON visitas(campanhaId)');
 
-    // A tabela 'focos' é mantida para compatibilidade, mas novas vistorias
-    // serão salvas em 'visitas'.
     await db.execute('''
       CREATE TABLE focos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -179,6 +166,7 @@ class DatabaseHelper {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    // Executa as migrações passo a passo
     if (oldVersion < 2) {
       await db.execute('''
         CREATE TABLE postos (
@@ -197,14 +185,8 @@ class DatabaseHelper {
       await db.execute('ALTER TABLE postos ADD COLUMN longitude REAL');
     }
 
-    // =======================================================
-    // >> MUDANÇA 13: LÓGICA DE MIGRAÇÃO PARA A VERSÃO 4 <<
-    // =======================================================
     if (oldVersion < 4) {
-      // Adiciona o campo de tipo de campanha
       await db.execute("ALTER TABLE campanhas ADD COLUMN tipoCampanha TEXT NOT NULL DEFAULT 'dengue'");
-
-      // Cria a nova tabela de imóveis
       await db.execute('''
         CREATE TABLE imoveis (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -225,8 +207,6 @@ class DatabaseHelper {
         )
       ''');
       await db.execute('CREATE INDEX idx_imoveis_bairroId ON imoveis(bairroId)');
-
-      // Cria a nova tabela de visitas
       await db.execute('''
         CREATE TABLE visitas (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -248,6 +228,15 @@ class DatabaseHelper {
       ''');
       await db.execute('CREATE INDEX idx_visitas_imovelId ON visitas(imovelId)');
       await db.execute('CREATE INDEX idx_visitas_campanhaId ON visitas(campanhaId)');
+    }
+
+    // =======================================================
+    // >> MUDANÇA 3: LÓGICA DE MIGRAÇÃO PARA A VERSÃO 5 (CORREÇÃO DO ERRO) <<
+    // =======================================================
+    if (oldVersion < 5) {
+      // Adiciona as colunas que estavam faltando na tabela de campanhas
+      await db.execute("ALTER TABLE campanhas ADD COLUMN responsavelTecnico TEXT");
+      await db.execute("ALTER TABLE campanhas ADD COLUMN corSetor TEXT");
     }
   }
   
