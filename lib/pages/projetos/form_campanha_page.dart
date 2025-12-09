@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 // Imports da Lógica de Dengue
 import 'package:geo_forest_surveillance/data/repositories/campanha_repository.dart';
@@ -36,9 +35,8 @@ class _FormCampanhaPageState extends State<FormCampanhaPage> {
   final _responsavelTecnicoController = TextEditingController();
 
   // Variáveis de estado
-  TipoProjeto _tipoProjetoSelecionado = TipoProjeto.vigilancia;
+  TipoProjeto _tipoProjetoSelecionado = TipoProjeto.cadastro; // Inicia com "Cadastro" selecionado
   String _tipoVigilanciaSelecionada = 'dengue';
-  Color _corSetorSelecionada = const Color(0xFF00838F); // Cor padrão
 
   @override
   void initState() {
@@ -54,10 +52,6 @@ class _FormCampanhaPageState extends State<FormCampanhaPage> {
       } else {
         _tipoProjetoSelecionado = TipoProjeto.vigilancia;
         _tipoVigilanciaSelecionada = campanha.tipoCampanha;
-      }
-
-      if (campanha.corSetor != null) {
-        _corSetorSelecionada = Color(int.parse(campanha.corSetor!));
       }
     }
   }
@@ -79,7 +73,6 @@ class _FormCampanhaPageState extends State<FormCampanhaPage> {
       final licenseId = context.read<LicenseProvider>().licenseData?.id;
       if (licenseId == null) throw Exception("Licença do usuário não identificada.");
 
-      // Define o tipo final da campanha com base na seleção do usuário
       final String tipoFinal = _tipoProjetoSelecionado == TipoProjeto.cadastro
           ? 'cadastro'
           : _tipoVigilanciaSelecionada;
@@ -91,10 +84,9 @@ class _FormCampanhaPageState extends State<FormCampanhaPage> {
         orgaoResponsavel: _orgaoController.text.trim(),
         dataCriacao: widget.isEditing ? widget.campanhaParaEditar!.dataCriacao : DateTime.now(),
         status: widget.isEditing ? widget.campanhaParaEditar!.status : 'ativa',
-        // Salvando os novos campos
         tipoCampanha: tipoFinal,
         responsavelTecnico: _responsavelTecnicoController.text.trim(),
-        corSetor: '0x${_corSetorSelecionada.value.toRadixString(16)}',
+        corSetor: null, // Removido da interface
       );
       
       if (widget.isEditing) {
@@ -121,27 +113,6 @@ class _FormCampanhaPageState extends State<FormCampanhaPage> {
     }
   }
 
-  void _abrirSeletorDeCor() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Selecione uma cor'),
-        content: SingleChildScrollView(
-          child: ColorPicker(
-            pickerColor: _corSetorSelecionada,
-            onColorChanged: (color) => setState(() => _corSetorSelecionada = color),
-          ),
-        ),
-        actions: <Widget>[
-          ElevatedButton(
-            child: const Text('OK'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -155,7 +126,6 @@ class _FormCampanhaPageState extends State<FormCampanhaPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 1. SELEÇÃO DO TIPO DE PROJETO
               _buildSectionTitle('1. Tipo de Projeto'),
               SegmentedButton<TipoProjeto>(
                 segments: const [
@@ -167,10 +137,8 @@ class _FormCampanhaPageState extends State<FormCampanhaPage> {
               ),
               const SizedBox(height: 24),
 
-              // 2. DETALHES DO PROJETO
               _buildSectionTitle('2. Detalhes do Projeto'),
               
-              // Campo que aparece dinamicamente
               if (_tipoProjetoSelecionado == TipoProjeto.vigilancia)
                 DropdownButtonFormField<String>(
                   value: _tipoVigilanciaSelecionada,
@@ -217,18 +185,7 @@ class _FormCampanhaPageState extends State<FormCampanhaPage> {
                   prefixIcon: Icon(Icons.person_outline),
                 ),
               ),
-              const SizedBox(height: 24),
-
-              // 3. CONFIGURAÇÕES ADICIONAIS
-              _buildSectionTitle('3. Configurações Adicionais'),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Cor dos Setores no Mapa'),
-                subtitle: const Text('Selecione uma cor para identificar as áreas deste projeto.'),
-                trailing: CircleAvatar(backgroundColor: _corSetorSelecionada),
-                onTap: _abrirSeletorDeCor,
-              ),
-
+              
               const SizedBox(height: 32),
               ElevatedButton.icon(
                 onPressed: _isSaving ? null : _salvarCampanha,

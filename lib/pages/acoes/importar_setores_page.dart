@@ -1,4 +1,4 @@
-// Arquivo: lib/pages/acoes/importar_setores_page.dart (NOVO ARQUIVO)
+// lib/pages/acoes/importar_setores_page.dart (VERSÃO SIMPLIFICADA)
 
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -7,7 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:geo_forest_surveillance/controller/import_controller.dart';
 
 class ImportarSetoresPage extends StatefulWidget {
-  final int acaoId; // Recebe o ID da ação para associar os dados
+  final int acaoId;
 
   const ImportarSetoresPage({super.key, required this.acaoId});
 
@@ -16,31 +16,15 @@ class ImportarSetoresPage extends StatefulWidget {
 }
 
 class _ImportarSetoresPageState extends State<ImportarSetoresPage> {
-  final _formKey = GlobalKey<FormState>();
-  final _municipioIdController = TextEditingController();
-  final _municipioNomeController = TextEditingController();
-  final _municipioUfController = TextEditingController();
-
   File? _selectedFile;
-
-  @override
-  void dispose() {
-    _municipioIdController.dispose();
-    _municipioNomeController.dispose();
-    _municipioUfController.dispose();
-    super.dispose();
-  }
 
   Future<void> _pickFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['geojson', 'json'],
     );
-
     if (result != null && result.files.single.path != null) {
-      setState(() {
-        _selectedFile = File(result.files.single.path!);
-      });
+      setState(() => _selectedFile = File(result.files.single.path!));
     }
   }
 
@@ -49,7 +33,7 @@ class _ImportarSetoresPageState extends State<ImportarSetoresPage> {
     return ChangeNotifierProvider(
       create: (context) => ImportController(context),
       child: Scaffold(
-        appBar: AppBar(title: const Text('Importar Município e Setores')),
+        appBar: AppBar(title: const Text('Importar Setores via GeoJSON')),
         body: Consumer<ImportController>(
           builder: (context, controller, child) {
             if (controller.isLoading) {
@@ -65,82 +49,45 @@ class _ImportarSetoresPageState extends State<ImportarSetoresPage> {
               );
             }
 
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Form(
-                key: _formKey,
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    const Icon(Icons.upload_file_outlined, size: 80, color: Colors.grey),
+                    const SizedBox(height: 24),
                     const Text(
-                      "Preencha os dados do município e selecione o arquivo GeoJSON contendo os polígonos dos setores.",
+                      'Selecione o arquivo GeoJSON contendo os polígonos dos municípios e setores.',
+                      textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 16, color: Colors.black54),
                     ),
-                    const SizedBox(height: 24),
-                    TextFormField(
-                      controller: _municipioIdController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                          labelText: 'ID do Município (Código IBGE)',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.pin_outlined)),
-                      validator: (v) => v!.trim().isEmpty ? 'Campo obrigatório' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _municipioNomeController,
-                      decoration: const InputDecoration(
-                          labelText: 'Nome do Município',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.location_city_outlined)),
-                      validator: (v) => v!.trim().isEmpty ? 'Campo obrigatório' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _municipioUfController,
-                      maxLength: 2,
-                      textCapitalization: TextCapitalization.characters,
-                      decoration: const InputDecoration(
-                          labelText: 'UF (Ex: SP)',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.public_outlined),
-                          counterText: ""),
-                      validator: (v) => v == null || v.trim().length != 2 ? 'Informe a sigla (2 letras).' : null,
-                    ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 32),
                     OutlinedButton.icon(
                       onPressed: _pickFile,
                       icon: const Icon(Icons.attach_file),
-                      label: Text(_selectedFile == null ? 'Selecionar Arquivo GeoJSON' : 'Arquivo: ${_selectedFile!.path.split(Platform.pathSeparator).last}'),
+                      label: Text(_selectedFile == null ? 'Selecionar Arquivo' : 'Arquivo: ${_selectedFile!.path.split(Platform.pathSeparator).last}'),
                       style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
                     ),
                     const SizedBox(height: 32),
                     ElevatedButton.icon(
-                      onPressed: () async {
-                        if (_formKey.currentState!.validate() && _selectedFile != null) {
-                          final bool sucesso = await controller.processarImportacaoDeSetores(
-                            geojsonFile: _selectedFile!,
-                            acaoId: widget.acaoId,
-                            municipioId: _municipioIdController.text.trim(),
-                            municipioNome: _municipioNomeController.text.trim(),
-                            municipioUf: _municipioUfController.text.trim().toUpperCase(),
-                          );
+                      onPressed: (_selectedFile == null) ? null : () async {
+                        final bool sucesso = await controller.processarGeoJsonCompleto(
+                          geojsonFile: _selectedFile!,
+                          acaoId: widget.acaoId,
+                        );
 
-                          if (sucesso && mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                              content: Text('Setores importados com sucesso!'),
-                              backgroundColor: Colors.green,
-                            ));
-                            Navigator.pop(context, true); // Retorna true para a página anterior recarregar
-                          }
-                        } else if (_selectedFile == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Por favor, selecione um arquivo GeoJSON.'), backgroundColor: Colors.orange),
-                          );
+                        if (sucesso && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Dados importados com sucesso!'),
+                            backgroundColor: Colors.green,
+                          ));
+                          Navigator.pop(context, true);
                         }
                       },
-                      icon: const Icon(Icons.upload_file),
-                      label: const Text('Importar Setores'),
+                      icon: const Icon(Icons.download_done_outlined),
+                      label: const Text('Confirmar Importação'),
                       style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
                     ),
                     if (controller.errorMessage != null)

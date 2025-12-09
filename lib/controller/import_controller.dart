@@ -1,15 +1,16 @@
-// Arquivo: lib/controller/import_controller.dart (VERSÃO COMPLETA E ATUALIZADA)
+// lib/controller/import_controller.dart (VERSÃO COMPLETA E FINAL)
 
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:collection/collection.dart';
 
 // Nossos Models e Providers
-import 'package:geo_forest_surveillance/models/campanha_model.dart';
 import 'package:geo_forest_surveillance/models/acao_model.dart';
 import 'package:geo_forest_surveillance/models/bairro_model.dart';
+import 'package:geo_forest_surveillance/models/campanha_model.dart';
 import 'package:geo_forest_surveillance/models/municipio_model.dart';
 import 'package:geo_forest_surveillance/providers/license_provider.dart';
 import 'package:geo_forest_surveillance/data/datasources/local/database_helper.dart';
@@ -88,6 +89,7 @@ class ImportController with ChangeNotifier {
     return data;
   }
 
+  /// (MÉTODO ANTIGO) Para criar uma campanha nova a partir de um formulário completo.
   Future<bool> processarImportacao({
     required File geojsonFile,
     required String nomeCampanha,
@@ -176,12 +178,10 @@ class ImportController with ChangeNotifier {
     }
   }
   
-  // =======================================================
-  // >> NOVO MÉTODO PARA IMPORTAR SETORES EM AÇÃO EXISTENTE <<
-  // =======================================================
+  /// (MÉTODO ANTIGO) Para importar setores em uma ação existente, com formulário.
   Future<bool> processarImportacaoDeSetores({
     required File geojsonFile,
-    required int acaoId, // <-- Recebe a Ação existente
+    required int acaoId,
     required String municipioId,
     required String municipioNome,
     required String municipioUf,
@@ -194,7 +194,6 @@ class ImportController with ChangeNotifier {
       final db = await DatabaseHelper.instance.database;
 
       await db.transaction((txn) async {
-        // Não cria campanha nem ação, usa a existente
         final novoMunicipio = Municipio(
             id: municipioId,
             acaoId: acaoId,
@@ -251,6 +250,7 @@ class ImportController with ChangeNotifier {
     }
   }
 
+  /// Para importar pontos (coordenadas) dos postos de saúde.
   Future<bool> processarImportacaoDePontos({
     required File geojsonFile,
   }) async {
@@ -294,11 +294,109 @@ class ImportController with ChangeNotifier {
       });
 
       _setLoading(false);
-      debugPrint(
-          "$postosAtualizados postos de saúde foram atualizados com coordenadas.");
+      debugPrint("$postosAtualizados postos de saúde foram atualizados com coordenadas.");
       return true;
     } catch (e) {
       _setError("Falha na importação dos pontos: ${e.toString()}");
+      return false;
+    }
+  }
+
+  /// >> NOVO MÉTODO PARA IMPORTAÇÃO AUTOMÁTICA <<
+  /// Lê o GeoJSON, extrai os dados de municípios e setores, e salva tudo.
+  Future<bool> processarGeoJsonCompleto({
+    required File geojsonFile,
+    required int acaoId,
+  }) async {
+    _setLoading(true);
+    try {
+      final content = await geojsonFile.readAsString();
+      final data = jsonDecode(content) as Map<String, dynamic>;
+
+      if (data['type'] != 'FeatureCollection' || data['features'] is! List) {
+        throw Exception("Arquivo GeoJSON inválido.");
+      }
+      
+      final features = data['features'] as List;
+      if (features.isEmpty) {
+        throw Exception("O arquivo GeoJSON não contém nenhuma feature (polígono).");
+      }
+
+      final firstProps = features.first['properties'] as Map<String, dynamic>?;
+      if (firstProps == null ||
+          // Removida a validação de município aqui, pois pode não estar presente
+          firstProps['setor_nome'] == null ||
+          firstProps['posto_saud'] == null) {
+        throw Exception("As propriedades 'setor_nome' e 'posto_saud' são obrigatórias em cada feature.");
+      }
+
+      final featuresPorMunicipio = groupBy(features, (feature) => (feature as Map)['properties']['municipio_id']?.toString() ?? 'municipio_padrao');
+      
+      final licenseId = context.read<LicenseProvider>().licenseData!.id;
+      final db = await DatabaseHelper.instance.database;
+      
+      await db.transaction((txn) async {
+        for (var entry in featuresPorMunicipio.entries) {
+          final municipioId = entry.key;
+          final setoresDoMunicipio = entry.value;
+          
+          final firstFeature = setoresDoMunicipio.first as Map;
+          final props = firstFeature['properties'];
+          final municipioNome = props['municipio_nome'] as String? ?? 'Município Padrão';
+          final municipioUf = props['uf'] as String? ?? 'SP';
+
+          if (municipioId != 'municipio_padrao') {
+            await txn.insert(
+              'municipios',
+              Municipio(id: municipioId, acaoId: acaoId, nome: municipioNome, uf: municipioUf).toMap(),
+              conflictAlgorithm: ConflictAlgorithm.ignore,
+            );
+          }
+
+          final Map<String, int> postosJaProcessados = {};
+          for (var feature in setoresDoMunicipio) {
+            final f = feature as Map;
+            final properties = f['properties'];
+            final geometria = f['geometry'];
+
+            final nomePosto = properties['posto_saud'] as String;
+            final nomeSetor = properties['setor_nome'] as String;
+            int postoId;
+
+            if (postosJaProcessados.containsKey(nomePosto)) {
+              postoId = postosJaProcessados[nomePosto]!;
+            } else {
+              final List<Map<String, dynamic>> postoExistente = await txn.query(
+                  'postos',
+                  columns: ['id'],
+                  where: 'nome = ? AND licenseId = ?',
+                  whereArgs: [nomePosto, licenseId],
+                  limit: 1);
+
+              if (postoExistente.isNotEmpty) {
+                postoId = postoExistente.first['id'] as int;
+              } else {
+                postoId = await txn.insert('postos', {'nome': nomePosto, 'licenseId': licenseId});
+              }
+              postosJaProcessados[nomePosto] = postoId;
+            }
+
+            final novoBairro = Bairro(
+              acaoId: acaoId,
+              municipioId: municipioId,
+              postoId: postoId,
+              nome: nomeSetor,
+              geometria: jsonEncode(geometria),
+            );
+            await txn.insert('bairros', novoBairro.toMap());
+          }
+        }
+      });
+
+      _setLoading(false);
+      return true;
+    } catch (e) {
+      _setError("Falha na importação: ${e.toString()}");
       return false;
     }
   }

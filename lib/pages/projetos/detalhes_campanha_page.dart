@@ -1,4 +1,4 @@
-// lib/pages/projetos/detalhes_campanha_page.dart
+// lib/pages/projetos/detalhes_campanha_page.dart (VERSÃO ATUALIZADA)
 
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -14,10 +14,10 @@ import 'package:geo_forest_surveillance/data/repositories/acao_repository.dart';
 import 'package:geo_forest_surveillance/pages/acoes/form_acao_page.dart';
 import 'package:geo_forest_surveillance/providers/license_provider.dart';
 import 'package:geo_forest_surveillance/pages/importacao/importar_postos_page.dart';
+import 'package:geo_forest_surveillance/pages/acoes/importar_setores_page.dart';
 
 
 class DetalhesCampanhaPage extends StatefulWidget {
-  // A página recebe apenas o ID da URL, conforme definido no GoRouter
   final int campanhaId;
 
   const DetalhesCampanhaPage({
@@ -33,7 +33,6 @@ class _DetalhesCampanhaPageState extends State<DetalhesCampanhaPage> {
   final _campanhaRepository = CampanhaRepository();
   final _acaoRepository = AcaoRepository();
 
-  // Futures para carregar os dados da página de forma assíncrona
   late Future<Campanha?> _campanhaFuture;
   late Future<List<Acao>> _acoesFuture;
 
@@ -43,7 +42,6 @@ class _DetalhesCampanhaPageState extends State<DetalhesCampanhaPage> {
     _carregarDados();
   }
 
-  // Função para (re)carregar todos os dados da tela
   void _carregarDados() {
     setState(() {
       _campanhaFuture = _campanhaRepository.getCampanhaById(widget.campanhaId);
@@ -59,12 +57,45 @@ class _DetalhesCampanhaPageState extends State<DetalhesCampanhaPage> {
       ),
     );
     if (acaoCriada == true) {
-      _carregarDados(); // Recarrega a lista de ações
+      _carregarDados();
     }
   }
 
+  Future<void> _criarAcaoPadraoEImportarSetores() async {
+    final novaAcao = Acao(
+      campanhaId: widget.campanhaId,
+      tipo: 'Ciclo de Importação',
+      descricao: 'Ação gerada para importação de setores via GeoJSON.',
+      dataCriacao: DateTime.now(),
+    );
+    final acaoId = await _acaoRepository.insertAcao(novaAcao);
+
+    if (!mounted) return;
+
+    final bool? importou = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ImportarSetoresPage(acaoId: acaoId),
+      ),
+    );
+
+    if (importou == true) {
+      _carregarDados();
+    }
+  }
+
+  // >> NOVA FUNÇÃO PARA NAVEGAR PARA A IMPORTAÇÃO DE POSTOS <<
+  Future<void> _navegarParaImportarPostos() async {
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ImportarPostosPage(),
+      ),
+    );
+    // Não é necessário recarregar os dados desta tela, pois os postos são globais
+  }
+
   void _navegarParaDetalhesAcao(Acao acao) {
-    // Usa GoRouter para navegar para a próxima tela da hierarquia
     context.push('/campanhas/${widget.campanhaId}/acoes/${acao.id}');
   }
 
@@ -73,7 +104,7 @@ class _DetalhesCampanhaPageState extends State<DetalhesCampanhaPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirmar Exclusão'),
-        content: Text('Tem certeza que deseja apagar a ação "${acao.tipo}" e todos os seus dados associados (municípios, bairros, focos)?'),
+        content: Text('Tem certeza que deseja apagar a ação "${acao.tipo}" e todos os seus dados associados?'),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancelar')),
           FilledButton(
@@ -113,24 +144,7 @@ class _DetalhesCampanhaPageState extends State<DetalhesCampanhaPage> {
         return Scaffold(
           appBar: AppBar(
             title: Text(campanha.nome),
-            actions: [
-              if (isGerente)
-                IconButton(
-                  icon: const Icon(Icons.add_location_alt_outlined),
-                  tooltip: 'Importar Coordenadas dos Postos',
-                  onPressed: () async {
-                    final bool? importou = await Navigator.push<bool>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ImportarPostosPage(),
-                      ),
-                    );
-                    if (importou == true) {
-                      _carregarDados();
-                    }
-                  },
-                ),
-            ],
+            // O botão foi removido daqui para ficar no corpo da tela
           ),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -173,10 +187,49 @@ class _DetalhesCampanhaPageState extends State<DetalhesCampanhaPage> {
                     final acoes = acoesSnapshot.data ?? [];
 
                     if (acoes.isEmpty) {
-                      return const Center(
+                      // >> WIDGET DE ESTADO VAZIO ATUALIZADO COM OS DOIS BOTÕES <<
+                      return Center(
                         child: Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Text('Nenhuma ação encontrada.\nClique no botão "+" para adicionar a primeira.', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: Colors.grey)),
+                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.stretch, // Para os botões ocuparem a largura
+                            children: [
+                              const Icon(Icons.map_outlined, size: 64, color: Colors.grey),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Nenhuma ação encontrada.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 18),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Comece importando os setores ou crie uma ação manualmente.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                              const SizedBox(height: 32),
+                              ElevatedButton.icon(
+                                onPressed: _criarAcaoPadraoEImportarSetores,
+                                icon: const Icon(Icons.upload_file_outlined),
+                                label: const Text('Importar Setores (GeoJSON)'),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              ),
+                              const SizedBox(height: 12), // Espaço entre os botões
+                              ElevatedButton.icon(
+                                onPressed: _navegarParaImportarPostos,
+                                icon: const Icon(Icons.add_location_alt_outlined),
+                                label: const Text('Importar Postos'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Theme.of(context).colorScheme.secondary,
+                                  foregroundColor: Theme.of(context).colorScheme.onSecondary,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     }
@@ -218,14 +271,10 @@ class _DetalhesCampanhaPageState extends State<DetalhesCampanhaPage> {
               ),
             ],
           ),
-          // =======================================================
-          // >> CORREÇÃO DE SINTAXE APLICADA AQUI <<
-          // O botão agora é atribuído à propriedade `floatingActionButton` do Scaffold.
-          // =======================================================
           floatingActionButton: isGerente
               ? FloatingActionButton.extended(
                   onPressed: _navegarParaNovaAcao,
-                  tooltip: 'Nova Ação',
+                  tooltip: 'Criar Nova Ação Manualmente',
                   icon: const Icon(Icons.add_task),
                   label: const Text('Nova Ação'),
                 )

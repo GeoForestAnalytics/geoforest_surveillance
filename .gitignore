@@ -1,45 +1,97 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
+# =======================================================
+# >> ARQUIVOS DE AMBIENTE E SEGURANÇA (MUITO IMPORTANTE) <<
+# =======================================================
+# Arquivos que contêm chaves de API, senhas de banco e outras informações sensíveis.
+# NUNCA envie estes arquivos para o repositório.
+.env
+*.env
 
-# IntelliJ related
+# Chaves de assinatura de release para Android.
+*.jks
+*.keystore
+
+# Arquivo com caminhos de SDK locais do Android.
+/android/local.properties
+
+
+# =======================================================
+# >> ARQUIVOS GERADOS PELO FLUTTER E DART <<
+# =======================================================
+# Arquivos de metadados gerados pelo Dart.
+.dart_tool/
+.packages
+
+# Arquivos de metadados gerados pelo Flutter.
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Arquivos de cache de pacotes (Pub).
+.pub-cache/
+.pub/
+
+# Diretório de build principal.
+/build/
+
+# Arquivos de simbolização para depuração.
+app.*.symbols
+
+# Mapas de ofuscação de código.
+app.*.map.json
+
+
+# =======================================================
+# >> ARQUIVOS ESPECÍFICOS DE PLATAFORMA (ANDROID/IOS) <<
+# =======================================================
+# Diretórios de build do Android.
+/android/app/debug
+/android/app/profile
+/android/app/release
+/android/.gradle
+
+# Arquivos gerados pelo CocoaPods no iOS.
+/ios/Pods/
+/ios/Podfile.lock
+/ios/.symlinks/
+/ios/Flutter/App.framework
+/ios/Flutter/Flutter.framework
+/ios/Flutter/.last_build_id
+/ios/Runner/Assets.xcassets/AppIcon.appiconset/
+
+
+# =======================================================
+# >> ARQUIVOS DE IDEs E EDITORES <<
+# =======================================================
+# IntelliJ / Android Studio
 *.iml
 *.ipr
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
+# VS Code
+# A pasta .vscode pode conter configurações úteis para a equipe,
+# mas se você quiser ignorá-la, descomente a linha abaixo.
 #.vscode/
 
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
+# Atom
+.atom/
 
-# Symbolication related
-app.*.symbols
+# =======================================================
+# >> ARQUIVOS DIVERSOS E DE SISTEMA OPERACIONAL <<
+# =======================================================
+# Logs e arquivos temporários.
+*.class
+*.log
+*.pyc
+*.swp
+.history
+migrate_working_dir/
 
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+ehthumbs.db
+Thumbs.db
